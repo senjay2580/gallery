@@ -3,10 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>图库</title>
-<!-- 单文件自定义图库。数据驱动、空开始、localStorage 持久化。
-     接 VPS 后端：把 upload 里 push 的 src（dataURL）换成上传接口返回的图片 URL；items 改成 fetch('/api/items')。
-     深色：把 <html> 改成 <html class="dark"> 即可。 -->
+<title>The Thing</title>
+<!-- 图存在 VPS（/api 后端 + /images 静态）。看图公开；上传/编辑/删除需登录。 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;450;500;600&display=swap" rel="stylesheet">
@@ -37,7 +35,7 @@
     color:var(--fg); font:inherit; font-weight:500; font-size:13.5px; cursor:pointer; display:flex; align-items:center; gap:6px; transition:.12s}
   .hbtn:hover{background:var(--hover)}
   .hbtn.icon{width:38px; padding:0; justify-content:center}
-  @media(max-width:720px){.hctrl{right:12px} .hbtn.txt{display:none}}
+  @media(max-width:720px){.hctrl{right:12px}}
   .search{width:100%; max-width:540px; position:relative}
   .search input{width:100%; height:44px; padding:0 16px 0 44px; border:1px solid transparent;
     border-radius:999px; background:var(--search); color:var(--fg); font:inherit; font-weight:450; outline:none;
@@ -94,8 +92,9 @@
   .mback{position:absolute; inset:0; background:var(--backdrop); backdrop-filter:blur(4px)}
   .mpanel{position:relative; background:var(--panel); color:var(--fg); border-radius:18px; max-width:1080px;
     width:100%; max-height:92vh; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.5)}
+  .mpanel.narrow{max-width:400px}
 
-  /* detail: 左图右信息 */
+  /* detail */
   .detail{display:grid; grid-template-columns:1.6fr 1fr; max-height:92vh}
   .detail .imgwrap{background:var(--card); display:flex; align-items:center; justify-content:center; min-height:300px}
   .detail .imgwrap img{width:100%; height:100%; max-height:92vh; object-fit:contain}
@@ -113,7 +112,7 @@
     display:grid; place-items:center; backdrop-filter:blur(6px)}
   .mclose:hover{background:var(--hover)}
 
-  /* upload */
+  /* upload / login */
   .uphead{padding:18px 22px; font-size:17px; font-weight:600; border-bottom:1px solid var(--line)}
   .upbody{padding:8px 22px; max-height:60vh; overflow:auto}
   .mrow{display:flex; gap:14px; align-items:flex-start; padding:14px 0; border-bottom:1px solid var(--line)}
@@ -121,6 +120,27 @@
   .mrow img{width:84px; height:84px; object-fit:cover; border-radius:10px; flex:none}
   .mfields{flex:1; display:flex; flex-direction:column; gap:8px}
   .foot{display:flex; justify-content:flex-end; gap:8px; padding:16px 22px; border-top:1px solid var(--line)}
+  /* 独立登录整页（Uiverse by andrew-demchenk0，去注册版） */
+  #loginpage[hidden]{display:none}
+  #loginpage{position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center;
+    padding:24px; background:var(--bg)}
+  .loginwrap{--input-focus:#2d8cf0; --font-color:#323232; --font-color-sub:#666; --bg-color:#fff; --main-color:#323232}
+  .logincard{display:flex; flex-direction:column; align-items:center; gap:20px; width:320px; padding:22px 20px 26px;
+    background:lightgrey; border-radius:5px; border:2px solid var(--main-color); box-shadow:4px 4px var(--main-color)}
+  .logincard .title{margin:6px 0 0; font-size:25px; font-weight:900; text-align:center; color:var(--main-color)}
+  .logincard form{display:flex; flex-direction:column; align-items:center; gap:18px; width:100%}
+  .flip-card__input{width:250px; height:40px; border-radius:5px; border:2px solid var(--main-color);
+    background:var(--bg-color); box-shadow:4px 4px var(--main-color); font-size:15px; font-weight:600;
+    color:var(--font-color); padding:5px 10px; outline:none; font-family:inherit}
+  .flip-card__input::placeholder{color:var(--font-color-sub); opacity:.8}
+  .flip-card__input:focus{border:2px solid var(--input-focus)}
+  .flip-card__btn{margin:6px 0 0; width:130px; height:42px; border-radius:5px; border:2px solid var(--main-color);
+    background:var(--bg-color); box-shadow:4px 4px var(--main-color); font-size:17px; font-weight:600;
+    color:var(--font-color); cursor:pointer; font-family:inherit; transition:.1s}
+  .flip-card__btn:active{box-shadow:0 0 var(--main-color); transform:translate(3px,3px)}
+  .lerr{color:#c0241a; font-size:13px; font-weight:600; min-height:16px; text-align:center}
+  .lcancel{background:none; border:0; color:var(--main-color); font:inherit; font-size:13px; cursor:pointer; opacity:.65}
+  .lcancel:hover{opacity:1}
 
   input.f{width:100%; font-family:inherit; font-size:14px; font-weight:450; padding:10px 13px;
     border:1px solid var(--line); border-radius:10px; background:var(--bg); color:inherit; outline:none}
@@ -141,6 +161,7 @@
       <input id="q" placeholder="搜索标题、分类、关键词…" autocomplete="off">
     </div>
     <div class="hctrl">
+      <button class="hbtn" id="auth">登录</button>
       <button class="hbtn icon" id="theme" title="夜间模式"></button>
     </div>
   </header>
@@ -154,18 +175,40 @@
   <input type="file" id="file" accept="image/*" multiple hidden>
   <div id="modal" hidden><div class="mback"></div><div class="mpanel" id="mpanel"></div></div>
 
+  <div id="loginpage" hidden>
+    <div class="loginwrap">
+      <div class="logincard">
+        <div class="title">登录</div>
+        <form id="loginbox" autocomplete="on">
+          <input class="flip-card__input" id="lu" name="name" type="text" placeholder="账号" autocomplete="username">
+          <input class="flip-card__input" id="lp" name="password" type="password" placeholder="密码" autocomplete="current-password">
+          <div class="lerr" id="lerr"></div>
+          <button class="flip-card__btn" type="submit">登录</button>
+          <button class="lcancel" id="lcancel" type="button">返回图库</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
 <script>
-const KEY='atlas.gallery.v1';
-let items=[]; try{const r=localStorage.getItem(KEY); if(r) items=JSON.parse(r);}catch(e){}
-let active='全部', query='', nextId=Math.max(0,...items.map(x=>x.id||0))+1;
+const API='/api';
+let items=[], active='全部', query='';
+let auth=localStorage.getItem('atlas.auth')||'';
 
 const pillsEl=document.getElementById('pills'), grid=document.getElementById('grid'),
       empty=document.getElementById('empty'), modal=document.getElementById('modal'),
-      panel=document.getElementById('mpanel'), fileInput=document.getElementById('file');
+      panel=document.getElementById('mpanel'), fileInput=document.getElementById('file'),
+      authBtn=document.getElementById('auth');
 
-function save(){try{localStorage.setItem(KEY,JSON.stringify(items));}catch(e){alert('本地存储满了（图太多/太大）。接 VPS 后端可解决持久化。');}}
-function cats(){const s=[];items.forEach(it=>{if(it.cat&&s.indexOf(it.cat)<0)s.push(it.cat);});return s;}
+function wh(){const h={'Content-Type':'application/json'}; if(auth)h['Authorization']='Bearer '+auth; return h;}
 function esc(t){return (t||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function cats(){const s=[];items.forEach(it=>{if(it.cat&&s.indexOf(it.cat)<0)s.push(it.cat);});return s;}
+
+async function reload(){
+  try{const r=await fetch(API+'/items'); items=r.ok?await r.json():[];}
+  catch(e){items=[];}
+  render();
+}
 
 function renderPills(){
   const list=['全部'].concat(cats());
@@ -182,9 +225,9 @@ function makeCard(it){
   img.onload=()=>img.classList.add('on'); img.src=it.src;
   fig.appendChild(img);
   fig.insertAdjacentHTML('beforeend',
-    '<button class="del" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>'+
+    (auth?'<button class="del" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>':'')+
     '<div class="ov"><div><div class="ttl">'+esc(it.title||'未命名')+'</div>'+(it.cat?'<div class="mt">'+esc(it.cat)+'</div>':'')+'</div></div>');
-  fig.querySelector('.del').onclick=e=>{e.stopPropagation();del(it.id);};
+  if(auth) fig.querySelector('.del').onclick=e=>{e.stopPropagation();del(it.id);};
   fig.onclick=()=>openDetail(it.id);
   return fig;
 }
@@ -193,17 +236,17 @@ function renderGrid(){
   const list=items.filter(it=>(active==='全部'||it.cat===active)&&(!q
     ||(it.title||'').toLowerCase().includes(q)||(it.cat||'').toLowerCase().includes(q)||(it.keywords||'').toLowerCase().includes(q)));
   grid.innerHTML=''; list.forEach(it=>grid.appendChild(makeCard(it)));
-  if(items.length===0){empty.hidden=false;empty.innerHTML='<div class="big">图库还是空的</div>点右下角「上传」添加你的第一张图片';}
+  if(items.length===0){empty.hidden=false;empty.innerHTML='<div class="big">图库还是空的</div>'+(auth?'点右下角「上传」添加你的第一张图片':'登录后即可上传图片');}
   else if(list.length===0){empty.hidden=false;empty.innerHTML='<div class="big">没有匹配</div>换个关键词或分类试试';}
   else empty.hidden=true;
 }
 function render(){renderPills();renderGrid();}
 
-function del(id){if(confirm('删除这张图片？')){items=items.filter(x=>x.id!==id);save();render();if(!modal.hidden)close();}}
-
+/* ── 详情 / 下载 / 编辑 / 删除 ── */
 function openDetail(id){
   const it=items.find(x=>x.id===id); if(!it)return;
   const tags=(it.keywords||'').split(/[,，\s]+/).filter(Boolean).map(k=>'<span class="tag">'+esc(k)+'</span>').join('');
+  panel.classList.remove('narrow');
   panel.innerHTML=
     '<button class="mclose" data-x><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>'+
     '<div class="detail"><div class="imgwrap"><img src="'+it.src+'"></div>'+
@@ -211,12 +254,16 @@ function openDetail(id){
       '<div class="dt">'+esc(it.title||'未命名')+'</div>'+
       '<div class="dc">'+esc(it.cat||'未分类')+'</div>'+
       '<div class="tags">'+(tags||'<span class="dc">无关键词</span>')+'</div>'+
-      '<div class="actions"><button class="btn pri" data-dl>下载</button><button class="btn" data-edit>编辑文字</button><button class="btn danger" data-del>删除</button></div>'+
+      '<div class="actions"><button class="btn pri" data-dl>下载</button>'+
+        (auth?'<button class="btn" data-edit>编辑文字</button><button class="btn danger" data-del>删除</button>':'')+
+      '</div>'+
     '</div></div>';
   panel.querySelector('[data-x]').onclick=close;
   panel.querySelector('[data-dl]').onclick=()=>download(it);
-  panel.querySelector('[data-edit]').onclick=()=>edit(it);
-  panel.querySelector('[data-del]').onclick=()=>del(it.id);
+  if(auth){
+    panel.querySelector('[data-edit]').onclick=()=>edit(it);
+    panel.querySelector('[data-del]').onclick=()=>del(it.id);
+  }
   modal.hidden=false;
 }
 function edit(it){
@@ -227,9 +274,13 @@ function edit(it){
     '<input class="f" id="e-k" placeholder="关键词（逗号分隔，用于搜索）" value="'+esc(it.keywords||'')+'">'+
     '</div><datalist id="catlist">'+cats().map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist>'+
     '<div class="actions"><button class="btn pri" id="e-s">保存</button><button class="btn" id="e-c2">取消</button></div>';
-  document.getElementById('e-s').onclick=()=>{it.title=document.getElementById('e-t').value.trim();
-    it.cat=document.getElementById('e-c').value.trim();it.keywords=document.getElementById('e-k').value.trim();
-    save();render();openDetail(it.id);};
+  document.getElementById('e-s').onclick=async()=>{
+    const body=JSON.stringify({title:document.getElementById('e-t').value.trim(),
+      cat:document.getElementById('e-c').value.trim(),keywords:document.getElementById('e-k').value.trim()});
+    const r=await fetch(API+'/items/'+it.id,{method:'PUT',headers:wh(),body});
+    if(r.status===401){return on401(()=>{openDetail(it.id);edit(items.find(x=>x.id===it.id)||it);});}
+    await reload(); openDetail(it.id);
+  };
   document.getElementById('e-c2').onclick=()=>openDetail(it.id);
 }
 function download(it){
@@ -238,11 +289,44 @@ function download(it){
     document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);})
    .catch(()=>{const a=document.createElement('a');a.href=it.src;a.target='_blank';a.click();});
 }
-function close(){modal.hidden=true;panel.innerHTML='';}
+async function del(id){
+  if(!auth) return openLogin(()=>del(id));
+  if(!confirm('删除这张图片？'))return;
+  const r=await fetch(API+'/items/'+id,{method:'DELETE',headers:wh()});
+  if(r.status===401){return on401(()=>del(id));}
+  await reload(); if(!modal.hidden)close();
+}
+function close(){modal.hidden=true;panel.innerHTML='';panel.classList.remove('narrow');}
 modal.querySelector('.mback').onclick=close;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!modal.hidden)close();});
 
-document.getElementById('fab').onclick=()=>fileInput.click();
+/* ── 登录 ── */
+function setAuth(t){auth=t||''; if(t)localStorage.setItem('atlas.auth',t); else localStorage.removeItem('atlas.auth');
+  authBtn.textContent=auth?'退出':'登录'; render();}
+function on401(retry){setAuth(''); openLogin(retry);}
+const loginPage=document.getElementById('loginpage');
+let loginAfter=null;
+function openLogin(after){
+  loginAfter=after||null;
+  document.getElementById('lu').value='';
+  document.getElementById('lp').value='';
+  document.getElementById('lerr').textContent='';
+  loginPage.hidden=false;
+  setTimeout(()=>document.getElementById('lu').focus(),30);
+}
+document.getElementById('loginbox').onsubmit=async(e)=>{
+  e.preventDefault();
+  const lerr=document.getElementById('lerr'); lerr.textContent='';
+  const r=await fetch(API+'/login',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({user:document.getElementById('lu').value.trim(),pass:document.getElementById('lp').value})});
+  if(r.ok){const d=await r.json(); setAuth(d.token); loginPage.hidden=true; const a=loginAfter; loginAfter=null; if(a)a();}
+  else{const d=await r.json().catch(()=>({})); lerr.textContent=d.error||'账号或密码错误';}
+};
+document.getElementById('lcancel').onclick=()=>{loginPage.hidden=true;};
+authBtn.onclick=()=>{ if(auth){ if(confirm('退出登录？'))setAuth(''); } else openLogin(); };
+
+/* ── 上传（需登录） ── */
+document.getElementById('fab').onclick=()=>{ if(!auth)return openLogin(()=>fileInput.click()); fileInput.click(); };
 fileInput.onchange=()=>{
   const files=[...fileInput.files]; if(!files.length)return;
   Promise.all(files.map(f=>new Promise(res=>{const fr=new FileReader();
@@ -251,6 +335,7 @@ fileInput.onchange=()=>{
   fileInput.value='';
 };
 function openUpload(loaded){
+  panel.classList.remove('narrow');
   panel.innerHTML=
     '<div class="uphead">上传 '+loaded.length+' 张图片</div>'+
     '<div class="upbody" id="ub"></div>'+
@@ -264,17 +349,23 @@ function openUpload(loaded){
       '<input class="f" data-f="kw" placeholder="关键词（逗号分隔，用于搜索）"></div>';
     row._d=it;ub.appendChild(row);});
   panel.querySelector('[data-x]').onclick=close;
-  document.getElementById('u-add').onclick=()=>{
-    [...ub.children].forEach(row=>{const it=row._d,g=f=>row.querySelector('[data-f="'+f+'"]').value.trim();
-      items.push({id:nextId++,src:it.src,w:it.w,h:it.h,title:g('title'),cat:g('cat'),keywords:g('kw')});});
-    save();render();close();
+  document.getElementById('u-add').onclick=async()=>{
+    const btn=document.getElementById('u-add'); btn.disabled=true; btn.textContent='上传中…';
+    for(const row of [...ub.children]){
+      const it=row._d, g=f=>row.querySelector('[data-f="'+f+'"]').value.trim();
+      const body=JSON.stringify({dataURL:it.src,w:it.w,h:it.h,title:g('title'),cat:g('cat'),keywords:g('kw')});
+      let r=await fetch(API+'/upload',{method:'POST',headers:wh(),body});
+      if(r.status===401){ btn.disabled=false; btn.textContent='添加到图库'; return on401(()=>openUpload(loaded)); }
+      if(!r.ok){ const e=await r.json().catch(()=>({})); alert('上传失败：'+(e.error||r.status)); btn.disabled=false; btn.textContent='添加到图库'; return; }
+    }
+    await reload(); close();
   };
   modal.hidden=false;
 }
 
 document.getElementById('q').addEventListener('input',e=>{query=e.target.value.trim();renderGrid();});
 
-/* 夜间模式 */
+/* ── 夜间模式 ── */
 const MOON='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
 const SUN='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>';
 const themeBtn=document.getElementById('theme');
@@ -284,7 +375,8 @@ themeBtn.onclick=()=>{const dark=!document.documentElement.classList.contains('d
   localStorage.setItem('atlas.theme',dark?'dark':'light');applyTheme();};
 applyTheme();
 
-render();
+authBtn.textContent=auth?'退出':'登录';
+reload();
 </script>
 </body>
 </html>

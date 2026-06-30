@@ -1,0 +1,15 @@
+[Unit]
+Description=Gallery upload API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+EnvironmentFile=/opt/gallery-api/.env
+ExecStart=/usr/bin/python3 /opt/gallery-api/server.py
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
