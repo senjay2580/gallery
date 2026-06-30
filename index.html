@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>图库</title>
+<!-- 单文件自定义图库。数据驱动、空开始、localStorage 持久化。
+     接 VPS 后端：把 upload 里 push 的 src（dataURL）换成上传接口返回的图片 URL；items 改成 fetch('/api/items')。
+     深色：把 <html> 改成 <html class="dark"> 即可。 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;450;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#ffffff; --fg:#13131a; --muted:#9b9aa3; --card:#f0f0f2;
+    --line:rgba(0,0,0,.08); --hover:rgba(0,0,0,.04);
+    --ink:#13131a; --ink-fg:#fff; --search:#f3f3f5; --radius:10px; --gap:3px;
+    --panel:#fff; --backdrop:rgba(15,15,20,.55);
+  }
+  html.dark{
+    --bg:#0c0c0e; --fg:#f1f1f4; --muted:#76757e; --card:#1a1a1f;
+    --line:rgba(255,255,255,.1); --hover:rgba(255,255,255,.06);
+    --ink:#f1f1f4; --ink-fg:#0c0c0e; --search:#1a1a1f; --panel:#141417; --backdrop:rgba(0,0,0,.66);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg); color:var(--fg);
+    font:15px/1.45 "Hanken Grotesk",-apple-system,system-ui,sans-serif; font-weight:450;
+    -webkit-font-smoothing:antialiased}
+  ::selection{background:#c9c9d6}
+
+  header{position:sticky; top:0; z-index:30; display:flex; align-items:center; justify-content:center;
+    height:68px; padding:0 24px; background:color-mix(in srgb,var(--bg) 80%,transparent);
+    backdrop-filter:blur(16px) saturate(150%)}
+  .hctrl{position:absolute; right:20px; top:50%; transform:translateY(-50%); display:flex; gap:6px; align-items:center}
+  .hbtn{height:38px; padding:0 14px; border:1px solid var(--line); border-radius:999px; background:transparent;
+    color:var(--fg); font:inherit; font-weight:500; font-size:13.5px; cursor:pointer; display:flex; align-items:center; gap:6px; transition:.12s}
+  .hbtn:hover{background:var(--hover)}
+  .hbtn.icon{width:38px; padding:0; justify-content:center}
+  @media(max-width:720px){.hctrl{right:12px} .hbtn.txt{display:none}}
+  .search{width:100%; max-width:540px; position:relative}
+  .search input{width:100%; height:44px; padding:0 16px 0 44px; border:1px solid transparent;
+    border-radius:999px; background:var(--search); color:var(--fg); font:inherit; font-weight:450; outline:none;
+    transition:background .15s,border-color .15s,box-shadow .15s}
+  .search input::placeholder{color:var(--muted)}
+  .search input:focus{background:var(--panel); border-color:var(--line); box-shadow:0 1px 10px rgba(0,0,0,.05)}
+  .search svg{position:absolute; left:16px; top:13px; color:var(--muted)}
+
+  nav.cats{position:sticky; top:68px; z-index:25; display:flex; gap:3px; overflow-x:auto;
+    scrollbar-width:none; padding:4px 18px 14px; background:var(--bg)}
+  nav.cats::-webkit-scrollbar{display:none}
+  .chip{flex:none; padding:7px 14px; border-radius:999px; border:0; background:transparent;
+    color:var(--muted); font:inherit; font-weight:500; font-size:13.5px; cursor:pointer; white-space:nowrap;
+    transition:color .14s,background .14s}
+  .chip:hover{color:var(--fg); background:var(--hover)}
+  .chip.on{background:var(--ink); color:var(--ink-fg)}
+  .chip.on:hover{background:var(--ink)}
+
+  main{padding:4px 10px 110px}
+  .grid{column-gap:var(--gap); column-count:5}
+  @media(max-width:1500px){.grid{column-count:4}}
+  @media(max-width:1080px){.grid{column-count:3}}
+  @media(max-width:720px){.grid{column-count:2} main{padding:6px 12px 90px} header{padding:0 14px} nav.cats{padding:4px 12px 12px}}
+  @media(max-width:440px){.grid{column-count:1}}
+
+  .card{break-inside:avoid; margin-bottom:var(--gap); position:relative; border-radius:0;
+    overflow:hidden; cursor:zoom-in; background:var(--card); animation:rise .45s both}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .card img{display:block; width:100%; height:auto; opacity:0; transition:opacity .5s ease, transform .5s ease}
+  .card img.on{opacity:1}
+  .card:hover img{transform:scale(1.04)}
+  .card .ov{position:absolute; inset:0; padding:11px; display:flex; align-items:flex-end;
+    background:linear-gradient(to top,rgba(0,0,0,.5),transparent 46%); opacity:0; transition:opacity .18s}
+  .card:hover .ov{opacity:1}
+  .card .ttl{color:#fff; font-weight:500; font-size:13px; line-height:1.3; overflow-wrap:anywhere}
+  .card .mt{color:rgba(255,255,255,.7); font-size:11px; margin-top:1px}
+  .card .del{position:absolute; top:9px; right:9px; width:28px; height:28px; border-radius:50%;
+    border:0; background:rgba(0,0,0,.45); color:#fff; cursor:pointer; display:grid; place-items:center;
+    opacity:0; transform:scale(.85); transition:.15s; backdrop-filter:blur(4px)}
+  .card:hover .del{opacity:1; transform:none}
+  .card .del:hover{background:#e0392b}
+
+  .empty{padding:130px 24px; text-align:center; color:var(--muted)}
+  .empty .big{font-size:24px; font-weight:600; color:var(--fg); margin-bottom:8px; letter-spacing:-.01em}
+
+  #fab{position:fixed; right:22px; bottom:22px; z-index:50; height:48px; padding:0 20px; border:0;
+    border-radius:999px; background:var(--ink); color:var(--ink-fg); font-family:inherit; font-size:14.5px;
+    font-weight:600; cursor:pointer; display:flex; align-items:center; gap:7px; box-shadow:0 6px 24px rgba(0,0,0,.2)}
+  #fab:hover{transform:translateY(-1px)}
+
+  /* ── modal ── */
+  #modal[hidden]{display:none}
+  #modal{position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; padding:20px}
+  .mback{position:absolute; inset:0; background:var(--backdrop); backdrop-filter:blur(4px)}
+  .mpanel{position:relative; background:var(--panel); color:var(--fg); border-radius:18px; max-width:1080px;
+    width:100%; max-height:92vh; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.5)}
+
+  /* detail: 左图右信息 */
+  .detail{display:grid; grid-template-columns:1.6fr 1fr; max-height:92vh}
+  .detail .imgwrap{background:var(--card); display:flex; align-items:center; justify-content:center; min-height:300px}
+  .detail .imgwrap img{width:100%; height:100%; max-height:92vh; object-fit:contain}
+  .detail .side{display:flex; flex-direction:column; padding:24px; overflow:auto}
+  .detail .dt{font-size:22px; font-weight:600; letter-spacing:-.01em; line-height:1.25;
+    overflow-wrap:anywhere; word-break:break-word; padding-right:40px}
+  .detail .dc{color:var(--muted); font-size:13.5px; margin-top:6px}
+  .detail .tags{margin-top:16px}
+  .detail .actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:auto; padding-top:22px}
+  @media(max-width:720px){.detail{grid-template-columns:1fr; max-height:none} .detail .imgwrap img{max-height:50vh}}
+
+  .tag{display:inline-block; padding:4px 11px; border-radius:999px; background:var(--card); font-size:12px; margin:0 6px 6px 0}
+  .mclose{position:absolute; top:14px; right:14px; z-index:2; width:34px; height:34px; border-radius:50%;
+    border:0; background:color-mix(in srgb,var(--panel) 70%,transparent); color:var(--fg); cursor:pointer;
+    display:grid; place-items:center; backdrop-filter:blur(6px)}
+  .mclose:hover{background:var(--hover)}
+
+  /* upload */
+  .uphead{padding:18px 22px; font-size:17px; font-weight:600; border-bottom:1px solid var(--line)}
+  .upbody{padding:8px 22px; max-height:60vh; overflow:auto}
+  .mrow{display:flex; gap:14px; align-items:flex-start; padding:14px 0; border-bottom:1px solid var(--line)}
+  .mrow:last-child{border-bottom:0}
+  .mrow img{width:84px; height:84px; object-fit:cover; border-radius:10px; flex:none}
+  .mfields{flex:1; display:flex; flex-direction:column; gap:8px}
+  .foot{display:flex; justify-content:flex-end; gap:8px; padding:16px 22px; border-top:1px solid var(--line)}
+
+  input.f{width:100%; font-family:inherit; font-size:14px; font-weight:450; padding:10px 13px;
+    border:1px solid var(--line); border-radius:10px; background:var(--bg); color:inherit; outline:none}
+  input.f:focus{border-color:var(--muted)}
+  .btn{font-family:inherit; font-size:14px; font-weight:500; padding:9px 18px; border-radius:999px; cursor:pointer;
+    border:1px solid var(--line); background:transparent; color:inherit; transition:.12s}
+  .btn:hover{background:var(--hover)}
+  .btn.pri{background:var(--ink); color:var(--ink-fg); border-color:transparent}
+  .btn.pri:hover{opacity:.9}
+  .btn.danger{color:#e0392b; border-color:rgba(224,57,43,.3)}
+  .btn.danger:hover{background:rgba(224,57,43,.08)}
+</style>
+</head>
+<body>
+  <header>
+    <div class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="q" placeholder="搜索标题、分类、关键词…" autocomplete="off">
+    </div>
+    <div class="hctrl">
+      <button class="hbtn icon" id="theme" title="夜间模式"></button>
+    </div>
+  </header>
+  <nav class="cats" id="pills"></nav>
+  <main>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" hidden></div>
+  </main>
+
+  <button id="fab"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>上传</button>
+  <input type="file" id="file" accept="image/*" multiple hidden>
+  <div id="modal" hidden><div class="mback"></div><div class="mpanel" id="mpanel"></div></div>
+
+<script>
+const KEY='atlas.gallery.v1';
+let items=[]; try{const r=localStorage.getItem(KEY); if(r) items=JSON.parse(r);}catch(e){}
+let active='全部', query='', nextId=Math.max(0,...items.map(x=>x.id||0))+1;
+
+const pillsEl=document.getElementById('pills'), grid=document.getElementById('grid'),
+      empty=document.getElementById('empty'), modal=document.getElementById('modal'),
+      panel=document.getElementById('mpanel'), fileInput=document.getElementById('file');
+
+function save(){try{localStorage.setItem(KEY,JSON.stringify(items));}catch(e){alert('本地存储满了（图太多/太大）。接 VPS 后端可解决持久化。');}}
+function cats(){const s=[];items.forEach(it=>{if(it.cat&&s.indexOf(it.cat)<0)s.push(it.cat);});return s;}
+function esc(t){return (t||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+function renderPills(){
+  const list=['全部'].concat(cats());
+  if(list.indexOf(active)<0) active='全部';
+  pillsEl.innerHTML='';
+  list.forEach(c=>{const b=document.createElement('button');
+    b.className='chip'+(c===active?' on':''); b.textContent=c;
+    b.onclick=()=>{active=c;render();}; pillsEl.appendChild(b);});
+}
+function makeCard(it){
+  const fig=document.createElement('figure'); fig.className='card';
+  fig.style.aspectRatio=(it.w||4)+' / '+(it.h||5);
+  const img=new Image(); img.loading='lazy'; img.alt=it.title||'';
+  img.onload=()=>img.classList.add('on'); img.src=it.src;
+  fig.appendChild(img);
+  fig.insertAdjacentHTML('beforeend',
+    '<button class="del" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>'+
+    '<div class="ov"><div><div class="ttl">'+esc(it.title||'未命名')+'</div>'+(it.cat?'<div class="mt">'+esc(it.cat)+'</div>':'')+'</div></div>');
+  fig.querySelector('.del').onclick=e=>{e.stopPropagation();del(it.id);};
+  fig.onclick=()=>openDetail(it.id);
+  return fig;
+}
+function renderGrid(){
+  const q=query.toLowerCase();
+  const list=items.filter(it=>(active==='全部'||it.cat===active)&&(!q
+    ||(it.title||'').toLowerCase().includes(q)||(it.cat||'').toLowerCase().includes(q)||(it.keywords||'').toLowerCase().includes(q)));
+  grid.innerHTML=''; list.forEach(it=>grid.appendChild(makeCard(it)));
+  if(items.length===0){empty.hidden=false;empty.innerHTML='<div class="big">图库还是空的</div>点右下角「上传」添加你的第一张图片';}
+  else if(list.length===0){empty.hidden=false;empty.innerHTML='<div class="big">没有匹配</div>换个关键词或分类试试';}
+  else empty.hidden=true;
+}
+function render(){renderPills();renderGrid();}
+
+function del(id){if(confirm('删除这张图片？')){items=items.filter(x=>x.id!==id);save();render();if(!modal.hidden)close();}}
+
+function openDetail(id){
+  const it=items.find(x=>x.id===id); if(!it)return;
+  const tags=(it.keywords||'').split(/[,，\s]+/).filter(Boolean).map(k=>'<span class="tag">'+esc(k)+'</span>').join('');
+  panel.innerHTML=
+    '<button class="mclose" data-x><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>'+
+    '<div class="detail"><div class="imgwrap"><img src="'+it.src+'"></div>'+
+    '<div class="side" id="dbody">'+
+      '<div class="dt">'+esc(it.title||'未命名')+'</div>'+
+      '<div class="dc">'+esc(it.cat||'未分类')+'</div>'+
+      '<div class="tags">'+(tags||'<span class="dc">无关键词</span>')+'</div>'+
+      '<div class="actions"><button class="btn pri" data-dl>下载</button><button class="btn" data-edit>编辑文字</button><button class="btn danger" data-del>删除</button></div>'+
+    '</div></div>';
+  panel.querySelector('[data-x]').onclick=close;
+  panel.querySelector('[data-dl]').onclick=()=>download(it);
+  panel.querySelector('[data-edit]').onclick=()=>edit(it);
+  panel.querySelector('[data-del]').onclick=()=>del(it.id);
+  modal.hidden=false;
+}
+function edit(it){
+  document.getElementById('dbody').innerHTML=
+    '<div class="mfields">'+
+    '<input class="f" id="e-t" placeholder="标题" value="'+esc(it.title||'')+'">'+
+    '<input class="f" id="e-c" placeholder="分类" value="'+esc(it.cat||'')+'" list="catlist">'+
+    '<input class="f" id="e-k" placeholder="关键词（逗号分隔，用于搜索）" value="'+esc(it.keywords||'')+'">'+
+    '</div><datalist id="catlist">'+cats().map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist>'+
+    '<div class="actions"><button class="btn pri" id="e-s">保存</button><button class="btn" id="e-c2">取消</button></div>';
+  document.getElementById('e-s').onclick=()=>{it.title=document.getElementById('e-t').value.trim();
+    it.cat=document.getElementById('e-c').value.trim();it.keywords=document.getElementById('e-k').value.trim();
+    save();render();openDetail(it.id);};
+  document.getElementById('e-c2').onclick=()=>openDetail(it.id);
+}
+function download(it){
+  fetch(it.src).then(r=>r.blob()).then(b=>{const u=URL.createObjectURL(b),a=document.createElement('a');
+    a.href=u;a.download=(it.title||'image').replace(/[^\w一-龥-]+/g,'_')+'.jpg';
+    document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);})
+   .catch(()=>{const a=document.createElement('a');a.href=it.src;a.target='_blank';a.click();});
+}
+function close(){modal.hidden=true;panel.innerHTML='';}
+modal.querySelector('.mback').onclick=close;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!modal.hidden)close();});
+
+document.getElementById('fab').onclick=()=>fileInput.click();
+fileInput.onchange=()=>{
+  const files=[...fileInput.files]; if(!files.length)return;
+  Promise.all(files.map(f=>new Promise(res=>{const fr=new FileReader();
+    fr.onload=()=>{const img=new Image();img.onload=()=>res({src:fr.result,w:img.naturalWidth,h:img.naturalHeight,name:f.name.replace(/\.[^.]+$/,'')});img.src=fr.result;};
+    fr.readAsDataURL(f);}))).then(openUpload);
+  fileInput.value='';
+};
+function openUpload(loaded){
+  panel.innerHTML=
+    '<div class="uphead">上传 '+loaded.length+' 张图片</div>'+
+    '<div class="upbody" id="ub"></div>'+
+    '<div class="foot"><button class="btn" data-x>取消</button><button class="btn pri" id="u-add">添加到图库</button></div>'+
+    '<datalist id="catlist">'+cats().map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist>';
+  const ub=document.getElementById('ub');
+  loaded.forEach(it=>{const row=document.createElement('div');row.className='mrow';
+    row.innerHTML='<img src="'+it.src+'"><div class="mfields">'+
+      '<input class="f" data-f="title" placeholder="标题" value="'+esc(it.name)+'">'+
+      '<input class="f" data-f="cat" placeholder="分类（如 摄影 / 设计 / 自然）" list="catlist">'+
+      '<input class="f" data-f="kw" placeholder="关键词（逗号分隔，用于搜索）"></div>';
+    row._d=it;ub.appendChild(row);});
+  panel.querySelector('[data-x]').onclick=close;
+  document.getElementById('u-add').onclick=()=>{
+    [...ub.children].forEach(row=>{const it=row._d,g=f=>row.querySelector('[data-f="'+f+'"]').value.trim();
+      items.push({id:nextId++,src:it.src,w:it.w,h:it.h,title:g('title'),cat:g('cat'),keywords:g('kw')});});
+    save();render();close();
+  };
+  modal.hidden=false;
+}
+
+document.getElementById('q').addEventListener('input',e=>{query=e.target.value.trim();renderGrid();});
+
+/* 夜间模式 */
+const MOON='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+const SUN='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>';
+const themeBtn=document.getElementById('theme');
+function applyTheme(){const dark=localStorage.getItem('atlas.theme')==='dark';
+  document.documentElement.classList.toggle('dark',dark);themeBtn.innerHTML=dark?SUN:MOON;}
+themeBtn.onclick=()=>{const dark=!document.documentElement.classList.contains('dark');
+  localStorage.setItem('atlas.theme',dark?'dark':'light');applyTheme();};
+applyTheme();
+
+render();
+</script>
+</body>
+</html>
