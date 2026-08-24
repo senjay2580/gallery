@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Thing</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJjIiB4MT0iMiIgeTE9IjIxIiB4Mj0iMjIiIHkyPSIzIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMWQyYjhhIi8+PHN0b3Agb2Zmc2V0PSIuNTUiIHN0b3AtY29sb3I9IiMyZjRmZDYiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiM1YjhiZjUiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0ibSIgeDE9IjEyIiB5MT0iMTgiIHgyPSIxMiIgeTI9IjkiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNkNjMzNmMiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmZjlhYTgiLz48L2xpbmVhckdyYWRpZW50PjxyYWRpYWxHcmFkaWVudCBpZD0icyIgY3g9Ii4zNSIgY3k9Ii4zIiByPSIuOCI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZWFmMmZmIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjOWNjMWZmIi8+PC9yYWRpYWxHcmFkaWVudD48L2RlZnM+PHJlY3QgeD0iMiIgeT0iMyIgd2lkdGg9IjIwIiBoZWlnaHQ9IjE4IiByeD0iNSIgZmlsbD0idXJsKCNjKSIvPjxjaXJjbGUgY3g9IjgiIGN5PSI4LjUiIHI9IjIuNSIgZmlsbD0idXJsKCNzKSIvPjxwYXRoIGQ9Ik00IDE3LjUgOSAxMS41IDEyIDE0LjIgMTUuNSA5LjggMjAgMTcuNVoiIGZpbGw9InVybCgjbSkiLz48L3N2Zz4=">
 <!-- 图存在 VPS（/api 后端 + /images 静态）。看图公开；上传/编辑/删除需登录。 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -35,7 +36,10 @@
     color:var(--fg); font:inherit; font-weight:500; font-size:13.5px; cursor:pointer; display:flex; align-items:center; gap:6px; transition:.12s}
   .hbtn:hover{background:var(--hover)}
   .hbtn.icon{width:38px; padding:0; justify-content:center}
-  @media(max-width:720px){.hctrl{right:12px}}
+  .hbtn[hidden]{display:none}   /* display:flex 会盖掉 [hidden] 默认的 display:none */
+  .brand{position:absolute; left:20px; top:50%; transform:translateY(-50%); width:34px; height:34px; display:flex}
+  .brand svg{width:100%; height:100%; filter:drop-shadow(0 2px 6px rgba(47,79,214,.35))}
+  @media(max-width:720px){.hctrl{right:12px} .brand{display:none}}
   .search{width:100%; max-width:540px; position:relative}
   .search input{width:100%; height:44px; padding:0 16px 0 44px; border:1px solid transparent;
     border-radius:999px; background:var(--search); color:var(--fg); font:inherit; font-weight:450; outline:none;
@@ -152,15 +156,73 @@
   .btn.pri:hover{opacity:.9}
   .btn.danger{color:#e0392b; border-color:rgba(224,57,43,.3)}
   .btn.danger:hover{background:rgba(224,57,43,.08)}
+  .btn:disabled{opacity:.45; cursor:not-allowed}
+  .btn:disabled:hover{background:transparent}
+  .btn.pri:disabled:hover{opacity:.45}
+
+  /* ── AI 工作台（右侧抽屉）──────────────────────────────────
+     刻意不照搬鉴定系统的圆角卡片风：那边是数据密集的后台表单，这里是图库，
+     走窄边框 + 方角 + 更松的行距，跟瀑布流的方角卡对齐。 */
+  #aiwrap[hidden]{display:none}
+  #aiwrap{position:fixed; inset:0; z-index:70}
+  .aiback{position:absolute; inset:0; background:var(--backdrop); backdrop-filter:blur(3px)}
+  #aiside{position:absolute; top:0; right:0; height:100%; width:min(430px,100%); display:flex;
+    flex-direction:column; background:var(--panel); border-left:1px solid var(--line);
+    box-shadow:-24px 0 70px rgba(0,0,0,.3); animation:slide .22s ease}
+  @keyframes slide{from{transform:translateX(30px);opacity:.3}to{transform:none;opacity:1}}
+  .aihead{display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--line)}
+  .aihead .t{font-size:15px; font-weight:600; letter-spacing:-.01em}
+  .aihead .who{font-size:11.5px; color:var(--muted); padding:2px 8px; border:1px solid var(--line); border-radius:999px}
+  .aihead .x{margin-left:auto; width:30px; height:30px; border:0; border-radius:8px; background:transparent;
+    color:var(--muted); cursor:pointer; display:grid; place-items:center}
+  .aihead .x:hover{background:var(--hover); color:var(--fg)}
+  .aitabs{display:flex; gap:2px; padding:10px 14px 0}
+  .aitab{flex:1; padding:8px 0; border:0; border-bottom:2px solid transparent; background:transparent;
+    color:var(--muted); font:inherit; font-weight:500; font-size:13.5px; cursor:pointer}
+  .aitab.on{color:var(--fg); border-bottom-color:var(--ink)}
+  .aibody{flex:1; overflow:auto; padding:16px 18px 22px}
+  .lbl{display:block; font-size:12px; font-weight:600; color:var(--muted); margin:14px 0 6px; letter-spacing:.02em}
+  .lbl:first-child{margin-top:0}
+  .fi{width:100%; font-family:inherit; font-size:13.5px; font-weight:450; padding:9px 11px; color:inherit;
+    border:1px solid var(--line); border-radius:8px; background:var(--bg); outline:none}
+  .fi:focus{border-color:var(--muted)}
+  textarea.fi{resize:vertical; min-height:88px; line-height:1.5}
+  select.fi{cursor:pointer}
+  .hint{font-size:11.5px; color:var(--muted); margin-top:5px; line-height:1.5}
+  .grp{border:1px solid var(--line); padding:13px; margin-bottom:12px}
+  .grp .gt{font-size:13px; font-weight:600; margin-bottom:2px}
+  .grp .gh{font-size:11.5px; color:var(--muted); margin-bottom:10px}
+  .row2{display:flex; gap:8px}
+  .row2>*{flex:1; min-width:0}
+  .aifoot{display:flex; gap:8px; padding:13px 18px; border-top:1px solid var(--line)}
+  .aifoot .btn{flex:1; justify-content:center; text-align:center}
+  .prev{margin-top:14px; border:1px solid var(--line); background:var(--card)}
+  .prev img{display:block; width:100%; height:auto}
+  .prev .pf{padding:10px 12px; font-size:12px; color:var(--muted); border-top:1px solid var(--line)}
+  .stat{font-size:12.5px; padding:9px 11px; margin-top:12px; border:1px solid var(--line); line-height:1.55}
+  .stat.err{color:#e0392b; border-color:rgba(224,57,43,.32); background:rgba(224,57,43,.05)}
+  .stat.ok{color:#1a7f4b; border-color:rgba(26,127,75,.3); background:rgba(26,127,75,.05)}
+  .stat.busy{color:var(--muted)}
+  .spin{display:inline-block; width:11px; height:11px; margin-right:7px; vertical-align:-1px;
+    border:2px solid var(--line); border-top-color:var(--fg); border-radius:50%; animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @media(max-width:720px){#aiside{width:100%}}
 </style>
 </head>
 <body>
   <header>
+    <a class="brand" href="/" aria-label="The Thing 首页">
+      <svg viewBox="0 0 24 24"><defs><linearGradient id="bc" x1="2" y1="21" x2="22" y2="3" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#1d2b8a"/><stop offset=".55" stop-color="#2f4fd6"/><stop offset="1" stop-color="#5b8bf5"/></linearGradient><linearGradient id="bm" x1="12" y1="18" x2="12" y2="9" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#d6336c"/><stop offset="1" stop-color="#ff9aa8"/></linearGradient><radialGradient id="bs" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#eaf2ff"/><stop offset="1" stop-color="#9cc1ff"/></radialGradient></defs><rect x="2" y="3" width="20" height="18" rx="5" fill="url(#bc)"/><circle cx="8" cy="8.5" r="2.5" fill="url(#bs)"/><path d="M4 17.5 9 11.5 12 14.2 15.5 9.8 20 17.5Z" fill="url(#bm)"/></svg>
+    </a>
     <div class="search">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <input id="q" placeholder="搜索标题、分类、关键词…" autocomplete="off">
     </div>
     <div class="hctrl">
+      <button class="hbtn" id="aibtn" hidden title="AI 生图">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
+        AI
+      </button>
       <button class="hbtn" id="auth">登录</button>
       <button class="hbtn icon" id="theme" title="夜间模式"></button>
     </div>
@@ -175,6 +237,22 @@
   <input type="file" id="file" accept="image/*" multiple hidden>
   <div id="modal" hidden><div class="mback"></div><div class="mpanel" id="mpanel"></div></div>
 
+  <div id="aiwrap" hidden>
+    <div class="aiback"></div>
+    <aside id="aiside">
+      <div class="aihead">
+        <span class="t">AI 生图</span>
+        <span class="who" id="aiwho"></span>
+        <button class="x" id="aix" title="关闭"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="aitabs">
+        <button class="aitab on" data-tab="gen">生成</button>
+        <button class="aitab" data-tab="cfg">模型设置</button>
+      </div>
+      <div class="aibody" id="aibody"></div>
+    </aside>
+  </div>
+
   <div id="loginpage" hidden>
     <div class="loginwrap">
       <div class="logincard">
@@ -184,7 +262,6 @@
           <input class="flip-card__input" id="lp" name="password" type="password" placeholder="密码" autocomplete="current-password">
           <div class="lerr" id="lerr"></div>
           <button class="flip-card__btn" type="submit">登录</button>
-          <button class="lcancel" id="lcancel" type="button">返回图库</button>
         </form>
       </div>
     </div>
@@ -205,7 +282,11 @@ function esc(t){return (t||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
 function cats(){const s=[];items.forEach(it=>{if(it.cat&&s.indexOf(it.cat)<0)s.push(it.cat);});return s;}
 
 async function reload(){
-  try{const r=await fetch(API+'/items'); items=r.ok?await r.json():[];}
+  try{
+    const r=await fetch(API+'/items',{headers:wh()});
+    if(r.status===401){items=[];render();return on401(()=>boot());}
+    items=r.ok?await r.json():[];
+  }
   catch(e){items=[];}
   render();
 }
@@ -236,7 +317,7 @@ function renderGrid(){
   const list=items.filter(it=>(active==='全部'||it.cat===active)&&(!q
     ||(it.title||'').toLowerCase().includes(q)||(it.cat||'').toLowerCase().includes(q)||(it.keywords||'').toLowerCase().includes(q)));
   grid.innerHTML=''; list.forEach(it=>grid.appendChild(makeCard(it)));
-  if(items.length===0){empty.hidden=false;empty.innerHTML='<div class="big">图库还是空的</div>'+(auth?'点右下角「上传」添加你的第一张图片':'登录后即可上传图片');}
+  if(items.length===0){empty.hidden=false;empty.innerHTML='<div class="big">图库还是空的</div>'+(auth?'点右下角「上传」添加你的第一张图片':'登录后查看图库');}
   else if(list.length===0){empty.hidden=false;empty.innerHTML='<div class="big">没有匹配</div>换个关键词或分类试试';}
   else empty.hidden=true;
 }
@@ -298,12 +379,33 @@ async function del(id){
 }
 function close(){modal.hidden=true;panel.innerHTML='';panel.classList.remove('narrow');}
 modal.querySelector('.mback').onclick=close;
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!modal.hidden)close();});
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
+  if(!modal.hidden)return close();
+  if(!aiWrap.hidden)closeAi();});
 
-/* ── 登录 ── */
+/* ── 登录 ──
+   图库整体私有：未登录看不到列表也取不到图（服务端强制，前端这层只是体验）。 */
 function setAuth(t){auth=t||''; if(t)localStorage.setItem('atlas.auth',t); else localStorage.removeItem('atlas.auth');
-  authBtn.textContent=auth?'退出':'登录'; render();}
-function on401(retry){setAuth(''); openLogin(retry);}
+  authBtn.textContent=auth?'退出':'登录';
+  // 退出即刻抹掉内存里的图库，否则已渲染的缩略图还留在屏幕上
+  if(!auth){items=[]; aiAllowed=false; aiState.shot=null;
+    document.getElementById('aibtn').hidden=true; closeAi(true); if(!modal.hidden)close();}
+  render();}
+function on401(retry){setAuth(''); items=[]; render(); openLogin(retry);}
+
+/* 启动：先问「我是谁」——决定放不放行图库、显不显示 AI 入口。 */
+async function boot(){
+  if(!auth){items=[];render();return openLogin(()=>boot());}
+  let me=null;
+  try{const r=await fetch(API+'/me',{headers:wh()}); if(r.ok) me=await r.json();}catch(e){}
+  if(!me){return on401(()=>boot());}
+  aiAllowed=!!me.ai;
+  document.getElementById('aibtn').hidden=!aiAllowed;
+  document.getElementById('aiwho').textContent=me.user;
+  authBtn.textContent='退出';
+  loginPage.hidden=true;
+  reload();
+}
 const loginPage=document.getElementById('loginpage');
 let loginAfter=null;
 function openLogin(after){
@@ -319,11 +421,16 @@ document.getElementById('loginbox').onsubmit=async(e)=>{
   const lerr=document.getElementById('lerr'); lerr.textContent='';
   const r=await fetch(API+'/login',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({user:document.getElementById('lu').value.trim(),pass:document.getElementById('lp').value})});
-  if(r.ok){const d=await r.json(); setAuth(d.token); loginPage.hidden=true; const a=loginAfter; loginAfter=null; if(a)a();}
+  if(r.ok){const d=await r.json(); setAuth(d.token); loginPage.hidden=true; const a=loginAfter; loginAfter=null; a?a():boot();}
   else{const d=await r.json().catch(()=>({})); lerr.textContent=d.error||'账号或密码错误';}
 };
-document.getElementById('lcancel').onclick=()=>{loginPage.hidden=true;};
-authBtn.onclick=()=>{ if(auth){ if(confirm('退出登录？'))setAuth(''); } else openLogin(); };
+authBtn.onclick=async()=>{
+  if(!auth) return openLogin();
+  if(!confirm('退出登录？'))return;
+  // 会话 Cookie 是 HttpOnly 的（<img> 取图要用），JS 删不掉，必须让服务端清
+  try{await fetch(API+'/logout',{method:'POST',headers:wh()});}catch(e){}
+  setAuth(''); openLogin(()=>boot());
+};
 
 /* ── 上传（需登录） ── */
 document.getElementById('fab').onclick=()=>{ if(!auth)return openLogin(()=>fileInput.click()); fileInput.click(); };
@@ -365,6 +472,189 @@ function openUpload(loaded){
 
 document.getElementById('q').addEventListener('input',e=>{query=e.target.value.trim();renderGrid();});
 
+/* ── AI 生图工作台 ─────────────────────────────────────────────
+   只有服务端 AI 白名单里的账号才拿得到入口；前端隐藏只是体验，
+   /api/ai/* 每一次都会再校验一遍身份。 */
+const AIKEY='atlas.ai';
+let aiAllowed=false, aiTab='gen', aiSys={}, aiBusy=false;
+const aiState={prompt:'',size:'1024x1024',model:'',shot:null,msg:null,cmsg:null};
+const aiWrap=document.getElementById('aiwrap'), aiBody=document.getElementById('aibody');
+
+function aiCfg(){try{return JSON.parse(localStorage.getItem(AIKEY))||{};}catch(e){return {};}}
+function aiCreds(){const c=aiCfg();return{baseUrl:(c.baseUrl||'').trim(),apiKey:(c.apiKey||'').trim()};}
+function aiModels(){const l=(aiCfg().imageModels||'').split(',').map(s=>s.trim()).filter(Boolean);
+  return l.length?l:(aiSys.imageModels||[]);}
+function aiVision(){return (aiCfg().visionModel||'').trim()||aiSys.visionModel||'';}
+
+/* 自己填的 baseUrl/apiKey 随请求走，服务端留空则回落它的默认配置 */
+async function aiPost(path,body){
+  const r=await fetch(API+'/ai/'+path,{method:'POST',headers:wh(),
+    body:JSON.stringify(Object.assign(aiCreds(),body||{}))});
+  const d=await r.json().catch(()=>({}));
+  if(r.status===401){on401(()=>boot());throw new Error('登录已过期');}
+  if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+  return d;
+}
+function aiMsg(where,kind,text){aiState[where]=text?{k:kind,t:text}:null;aiRender();}
+
+async function openAi(){
+  if(!aiAllowed)return;
+  aiWrap.hidden=false;
+  if(!aiSys.baseUrl){
+    try{const r=await fetch(API+'/ai/config',{headers:wh()}); if(r.ok)aiSys=await r.json();}catch(e){}
+  }
+  aiRender();
+}
+function closeAi(force){
+  if(aiBusy&&!force){
+    if(!confirm('正在生成图片，关闭面板不会取消它（额度已经花了）。仍要关闭？'))return;
+  }
+  aiWrap.hidden=true;
+}
+document.getElementById('aibtn').onclick=openAi;
+document.getElementById('aix').onclick=()=>closeAi();
+aiWrap.querySelector('.aiback').onclick=()=>closeAi();
+document.querySelectorAll('.aitab').forEach(b=>b.onclick=()=>{aiTab=b.dataset.tab;aiRender();});
+
+function aiRender(){
+  document.querySelectorAll('.aitab').forEach(b=>b.classList.toggle('on',b.dataset.tab===aiTab));
+  if(aiTab==='gen'){aiBody.innerHTML=genHTML();bindGen();}
+  else{aiBody.innerHTML=cfgHTML();bindCfg();}
+}
+function statHTML(m){return m?'<div class="stat '+m.k+'">'+(m.k==='busy'?'<span class="spin"></span>':'')+esc(m.t)+'</div>':'';}
+function opts(list,cur){return list.map(v=>'<option'+(v===cur?' selected':'')+'>'+esc(v)+'</option>').join('');}
+
+function genHTML(){
+  const ms=aiModels();
+  if(!ms.length)return '<div class="stat err">还没有可用的生图模型。先到「模型设置」填接口地址和 Key，再拉取模型。</div>';
+  if(ms.indexOf(aiState.model)<0)aiState.model=ms[0];
+  return '<label class="lbl">画面描述</label>'+
+    '<textarea class="fi" id="g-p" placeholder="例：一只戴眼镜的橘猫在窗边看书，暖色调，插画风">'+esc(aiState.prompt)+'</textarea>'+
+    '<div class="row2"><div><label class="lbl">生图模型</label><select class="fi" id="g-m">'+opts(ms,aiState.model)+'</select></div>'+
+    '<div><label class="lbl">尺寸</label><select class="fi" id="g-s">'+opts(['1024x1024','1536x1024','1024x1536'],aiState.size)+'</select></div></div>'+
+    '<div class="hint">一张通常要 1–4 分钟。为避免重复计费，同一时间只允许一张在生成，失败也不会自动重试。</div>'+
+    '<button class="btn pri" id="g-go" style="width:100%;margin-top:12px"'+(aiBusy?' disabled':'')+'>'+(aiBusy?'生成中…':'生成')+'</button>'+
+    statHTML(aiState.msg)+(aiState.shot?shotHTML():'');
+}
+function shotHTML(){
+  const s=aiState.shot;
+  return '<div class="prev"><img src="'+s.dataURL+'">'+(s.revised?'<div class="pf">'+esc(s.revised.slice(0,200))+'</div>':'')+'</div>'+
+    '<label class="lbl">标题</label><input class="fi" id="s-t" value="'+esc(s.title||'')+'">'+
+    '<label class="lbl">分类</label><input class="fi" id="s-c" list="catlist2" value="'+esc(s.cat||'')+'">'+
+    '<label class="lbl">关键词</label><input class="fi" id="s-k" value="'+esc(s.keywords||'')+'">'+
+    '<datalist id="catlist2">'+cats().map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist>'+
+    '<div class="row2" style="margin-top:14px">'+
+      '<button class="btn" id="s-tag"'+(aiBusy?' disabled':'')+'>AI 自动分类</button>'+
+      '<button class="btn pri" id="s-add"'+(aiBusy?' disabled':'')+'>加入图库</button></div>';
+}
+function keepGen(){const p=document.getElementById('g-p');if(p)aiState.prompt=p.value;
+  const m=document.getElementById('g-m');if(m)aiState.model=m.value;
+  const s=document.getElementById('g-s');if(s)aiState.size=s.value;
+  const t=document.getElementById('s-t');if(t&&aiState.shot)aiState.shot.title=t.value;
+  const c=document.getElementById('s-c');if(c&&aiState.shot)aiState.shot.cat=c.value;
+  const k=document.getElementById('s-k');if(k&&aiState.shot)aiState.shot.keywords=k.value;}
+
+function bindGen(){
+  const go=document.getElementById('g-go'); if(!go)return;
+  ['g-p','g-m','g-s','s-t','s-c','s-k'].forEach(id=>{const el=document.getElementById(id);
+    if(el)el.addEventListener('change',keepGen);});
+  go.onclick=async()=>{
+    keepGen();
+    if(!aiState.prompt.trim())return aiMsg('msg','err','先写点画面描述');
+    if(aiBusy)return;                                   // 防连点：后端也有锁，这里省一次往返
+    aiBusy=true; aiState.shot=null;
+    const t0=Date.now();
+    const tick=setInterval(()=>aiMsg('msg','busy','生成中… 已用 '+Math.round((Date.now()-t0)/1000)+' 秒，请勿关闭'),1000);
+    aiMsg('msg','busy','生成中… 请勿关闭');
+    try{
+      const d=await aiPost('image',{prompt:aiState.prompt,model:aiState.model,size:aiState.size});
+      aiState.shot={dataURL:d.dataURL,revised:d.revised_prompt||'',title:'',cat:'',keywords:''};
+      clearInterval(tick); aiBusy=false;
+      aiMsg('msg','ok','生成完成（'+Math.round((Date.now()-t0)/1000)+' 秒）· '+d.model);
+      autoTag();                                        // 顺手让小模型把分类填上
+    }catch(e){
+      clearInterval(tick); aiBusy=false;
+      aiMsg('msg','err',String(e.message||e));
+    }
+  };
+  const tag=document.getElementById('s-tag'); if(tag)tag.onclick=()=>{keepGen();autoTag();};
+  const add=document.getElementById('s-add'); if(add)add.onclick=addToGallery;
+}
+
+/* 视觉小模型当分类 agent：看图 → 标题/分类/关键词，并把现有分类喂给它以便复用而不是乱造新分类 */
+async function autoTag(){
+  if(!aiState.shot||aiBusy)return;
+  if(!aiVision())return aiMsg('msg','err','未配置视觉模型，无法自动分类');
+  aiBusy=true; aiMsg('msg','busy','AI 正在看图分类…');
+  try{
+    const d=await aiPost('tag',{dataURL:aiState.shot.dataURL,model:aiVision(),cats:cats().join(',')});
+    Object.assign(aiState.shot,{title:d.title||'',cat:d.cat||'',keywords:d.keywords||''});
+    aiBusy=false; aiMsg('msg','ok','已自动填写，可手动修改后入库');
+  }catch(e){aiBusy=false;aiMsg('msg','err','自动分类失败：'+(e.message||e));}
+}
+
+async function addToGallery(){
+  keepGen();
+  const s=aiState.shot; if(!s)return;
+  aiBusy=true; aiMsg('msg','busy','正在加入图库…');
+  try{
+    const r=await fetch(API+'/upload',{method:'POST',headers:wh(),body:JSON.stringify(
+      {dataURL:s.dataURL,title:s.title||'AI 生成',cat:s.cat||'',keywords:s.keywords||''})});
+    if(r.status===401){aiBusy=false;return on401(()=>boot());}
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+    aiBusy=false; aiState.shot=null; aiState.msg=null;
+    await reload(); aiMsg('msg','ok','已加入图库');
+  }catch(e){aiBusy=false;aiMsg('msg','err','入库失败：'+(e.message||e));}
+}
+
+function cfgHTML(){
+  const c=aiCfg();
+  return '<div class="hint">兼容 OpenAI 接口。留空即用服务器默认'+(aiSys.keyCount?'（已配 '+aiSys.keyCount+' 个 Key，轮换使用）':'')+
+    '。这里填的内容只存在你这台设备的浏览器里，不上传保存。</div>'+
+    '<div class="grp" style="margin-top:14px"><div class="gt">接口</div><div class="gh">网关地址与密钥</div>'+
+      '<label class="lbl">Base URL</label><input class="fi" id="c-b" placeholder="'+esc(aiSys.baseUrl||'https://…')+'" value="'+esc(c.baseUrl||'')+'">'+
+      '<label class="lbl">API Key</label><input class="fi" id="c-k" type="password" autocomplete="new-password" placeholder="'+
+        (aiSys.keyCount?'服务器默认已配 '+aiSys.keyCount+' 个':'sk-…')+'" value="'+esc(c.apiKey||'')+'">'+
+      '<div class="hint">多个 Key 用英文逗号分隔，每次请求轮换；某个 Key 被拒会自动换下一个。</div></div>'+
+    '<div class="grp"><div class="gt">生图模型</div><div class="gh">可填多个，生成页下拉切换</div>'+
+      '<input class="fi" id="c-i" placeholder="'+esc((aiSys.imageModels||[]).join(', ')||'gpt-image-2, …')+'" value="'+esc(c.imageModels||'')+'">'+
+      '<button class="btn" id="c-pull" style="width:100%;margin-top:10px">从接口拉取可用模型</button></div>'+
+    '<div class="grp"><div class="gt">视觉模型</div><div class="gh">看图自动生成标题 / 分类 / 关键词</div>'+
+      '<input class="fi" id="c-v" placeholder="'+esc(aiSys.visionModel||'gpt-5.4-mini')+'" value="'+esc(c.visionModel||'')+'"></div>'+
+    '<div class="row2"><button class="btn" id="c-test">测试连接</button><button class="btn pri" id="c-save">保存</button></div>'+
+    statHTML(aiState.cmsg);
+}
+function readCfg(){return{baseUrl:document.getElementById('c-b').value.trim(),
+  apiKey:document.getElementById('c-k').value.trim(),
+  imageModels:document.getElementById('c-i').value.trim(),
+  visionModel:document.getElementById('c-v').value.trim()};}
+function bindCfg(){
+  document.getElementById('c-save').onclick=()=>{
+    localStorage.setItem(AIKEY,JSON.stringify(readCfg()));
+    aiMsg('cmsg','ok','已保存到本机');
+  };
+  document.getElementById('c-test').onclick=async()=>{
+    localStorage.setItem(AIKEY,JSON.stringify(readCfg()));   // 用刚填的值去试
+    aiMsg('cmsg','busy','连接中…');
+    try{const d=await aiPost('models',{});
+      aiMsg('cmsg','ok','连接成功，接口提供 '+(d.models||[]).length+' 个模型');
+    }catch(e){aiMsg('cmsg','err','连接失败：'+(e.message||e));}
+  };
+  document.getElementById('c-pull').onclick=async()=>{
+    localStorage.setItem(AIKEY,JSON.stringify(readCfg()));
+    aiMsg('cmsg','busy','拉取中…');
+    try{
+      const d=await aiPost('models',{});
+      const imgs=(d.models||[]).filter(m=>/image|dall|flux|sd|midjourney|seedream|qwen-image/i.test(m));
+      if(!imgs.length)return aiMsg('cmsg','err','这个接口没有看起来像生图的模型，共 '+(d.models||[]).length+' 个');
+      const cur=readCfg(); cur.imageModels=imgs.join(', ');
+      localStorage.setItem(AIKEY,JSON.stringify(cur));
+      aiMsg('cmsg','ok','已填入 '+imgs.length+' 个生图模型：'+imgs.join('、'));
+    }catch(e){aiMsg('cmsg','err','拉取失败：'+(e.message||e));}
+  };
+}
+
 /* ── 夜间模式 ── */
 const MOON='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
 const SUN='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>';
@@ -376,7 +666,7 @@ themeBtn.onclick=()=>{const dark=!document.documentElement.classList.contains('d
 applyTheme();
 
 authBtn.textContent=auth?'退出':'登录';
-reload();
+boot();
 </script>
 </body>
 </html>
