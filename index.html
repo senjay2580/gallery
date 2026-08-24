@@ -89,6 +89,7 @@
     border-radius:999px; background:var(--ink); color:var(--ink-fg); font-family:inherit; font-size:14.5px;
     font-weight:600; cursor:pointer; display:flex; align-items:center; gap:7px; box-shadow:0 6px 24px rgba(0,0,0,.2)}
   #fab:hover{transform:translateY(-1px)}
+  #fab{transition:right .24s ease}
 
   /* ── modal ── */
   #modal[hidden]{display:none}
@@ -160,45 +161,152 @@
   .btn:disabled:hover{background:transparent}
   .btn.pri:disabled:hover{opacity:.45}
 
-  /* ── AI 工作台（右侧抽屉）──────────────────────────────────
-     刻意不照搬鉴定系统的圆角卡片风：那边是数据密集的后台表单，这里是图库，
-     走窄边框 + 方角 + 更松的行距，跟瀑布流的方角卡对齐。 */
-  #aiwrap[hidden]{display:none}
-  #aiwrap{position:fixed; inset:0; z-index:70}
-  .aiback{position:absolute; inset:0; background:var(--backdrop); backdrop-filter:blur(3px)}
-  #aiside{position:absolute; top:0; right:0; height:100%; width:min(430px,100%); display:flex;
-    flex-direction:column; background:var(--panel); border-left:1px solid var(--line);
-    box-shadow:-24px 0 70px rgba(0,0,0,.3); animation:slide .22s ease}
-  @keyframes slide{from{transform:translateX(30px);opacity:.3}to{transform:none;opacity:1}}
-  .aihead{display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--line)}
-  .aihead .t{font-size:15px; font-weight:600; letter-spacing:-.01em}
-  .aihead .who{font-size:11.5px; color:var(--muted); padding:2px 8px; border:1px solid var(--line); border-radius:999px}
-  .aihead .x{margin-left:auto; width:30px; height:30px; border:0; border-radius:8px; background:transparent;
+  /* ── AI 工作台：与主内容同层「挤压」而非遮盖 ──────────────────
+     主体三块（header / nav / main）在面板打开时右侧让出空间，瀑布流会
+     自然重排列数；面板本身 fixed 贴右，没有遮罩层。
+     刻意不照搬鉴定系统的圆角卡片风：那边是数据密集的后台表单，这里跟
+     瀑布流的方角、窄边框对齐。 */
+  :root{--aiw:420px}
+  header,nav.cats,main{transition:padding-right .24s ease}
+  body.ai-on header,body.ai-on nav.cats,body.ai-on main{padding-right:calc(var(--aiw) + 10px)}
+  /* 上传浮钮 z-index 比侧栏高，不让位就会盖住发送键 */
+  body.ai-on #fab{right:calc(var(--aiw) + 22px)}
+  /* header 右上角这组是 absolute 定位的，不吃 padding-right，必须单独让位 */
+  .hctrl{transition:right .24s ease}
+  body.ai-on .hctrl{right:calc(var(--aiw) + 20px)}
+  #aiside[hidden]{display:none}
+  #aiside{position:fixed; top:0; right:0; z-index:40; height:100dvh; width:var(--aiw);
+    display:flex; flex-direction:column; background:var(--panel);
+    border-left:1px solid var(--line); animation:slide .24s ease}
+  @keyframes slide{from{transform:translateX(100%)}to{transform:none}}
+  /* 左边缘拖拽条：拖它改 --aiw，主内容的 padding 跟着变，所以拖动就是实时挤压 */
+  .aigrip{position:absolute; left:-3px; top:0; width:7px; height:100%; cursor:col-resize; z-index:2}
+  .aigrip::after{content:''; position:absolute; left:2px; top:0; width:3px; height:100%;
+    background:transparent; transition:background .14s}
+  .aigrip:hover::after,body.aidrag .aigrip::after{background:var(--muted)}
+  body.aidrag{cursor:col-resize; user-select:none}
+  /* 拖动时关掉过渡，否则跟手会有延迟 */
+  body.aidrag header,body.aidrag nav.cats,body.aidrag main,body.aidrag #fab,body.aidrag .hctrl{transition:none}
+  body.aidrag #aiside{animation:none}
+  .tplbadge{display:inline-block; padding:3px 9px; margin-bottom:8px; border:1px solid var(--line);
+    border-radius:999px; font-size:11px; color:var(--muted)}
+  .aihead{display:flex; align-items:center; gap:9px; padding:15px 16px; border-bottom:1px solid var(--line)}
+  .aihead .t{font-size:14.5px; font-weight:600; letter-spacing:-.01em}
+  .aihead .who{font-size:11px; color:var(--muted); padding:2px 8px; border:1px solid var(--line); border-radius:999px}
+  .aihead .ico{width:29px; height:29px; border:0; border-radius:8px; background:transparent;
     color:var(--muted); cursor:pointer; display:grid; place-items:center}
-  .aihead .x:hover{background:var(--hover); color:var(--fg)}
-  .aitabs{display:flex; gap:2px; padding:10px 14px 0}
+  .aihead .ico:hover{background:var(--hover); color:var(--fg)}
+  .aihead .ico.r{margin-left:auto}
+  .aitabs{display:flex; padding:10px 16px 0; gap:2px}
   .aitab{flex:1; padding:8px 0; border:0; border-bottom:2px solid transparent; background:transparent;
-    color:var(--muted); font:inherit; font-weight:500; font-size:13.5px; cursor:pointer}
+    color:var(--muted); font:inherit; font-weight:500; font-size:13px; cursor:pointer}
   .aitab.on{color:var(--fg); border-bottom-color:var(--ink)}
-  .aibody{flex:1; overflow:auto; padding:16px 18px 22px}
+  .aibody{flex:1; overflow:auto; padding:18px 18px 22px}
+
+  /* 对话流 */
+  .msgs{display:flex; flex-direction:column; gap:20px}
+  .msg.u{align-self:flex-end; max-width:88%; padding:10px 14px; border-radius:16px 16px 4px 16px;
+    background:var(--ink); color:var(--ink-fg); font-size:13.5px; line-height:1.5; overflow-wrap:anywhere}
+  .msg.a{align-self:flex-start; width:100%}
+  .msg .rp{font-size:11.5px; color:var(--muted); line-height:1.6; margin-bottom:10px; overflow-wrap:anywhere}
+  .shot{border:1px solid var(--line); background:var(--card); overflow:hidden}
+  .shot img{display:block; width:100%; height:auto; cursor:zoom-in}
+  .shot .meta{display:flex; gap:7px; align-items:center; flex-wrap:wrap; padding:11px 12px; border-top:1px solid var(--line)}
+  .mini{padding:5px 10px; border:1px solid var(--line); border-radius:999px; background:transparent;
+    color:var(--fg); font:inherit; font-size:11.5px; cursor:pointer; transition:.12s}
+  .mini:hover{background:var(--hover)}
+  .mini.go{background:var(--ink); color:var(--ink-fg); border-color:transparent}
+  .mini:disabled{opacity:.45; cursor:not-allowed}
+  .mini.done{color:#1a7f4b; border-color:rgba(26,127,75,.35)}
+  .tagfields{display:flex; flex-direction:column; gap:8px; padding:12px 12px 4px}
+  .empty-chat{padding:44px 10px; text-align:center; color:var(--muted); font-size:12.5px; line-height:1.75}
+  .empty-chat b{display:block; color:var(--fg); font-size:15px; font-weight:600; margin-bottom:6px}
+
+  /* 输入区（ChatGPT 式：圆角容器、内嵌工具条、可展开） */
+  .composer{position:relative; border-top:1px solid var(--line); padding:13px 16px 15px; background:var(--panel)}
+  .cbox{border:1px solid var(--line); border-radius:16px; background:var(--bg); padding:9px 11px 8px;
+    transition:border-color .14s, box-shadow .14s}
+  .cbox:focus-within{border-color:var(--muted); box-shadow:0 1px 12px rgba(0,0,0,.06)}
+  .cbox textarea{width:100%; border:0; outline:none; resize:none; background:transparent; color:inherit;
+    font:inherit; font-size:13.5px; line-height:1.55; max-height:180px; min-height:22px; display:block}
+  .ctools{display:flex; align-items:center; gap:5px; margin-top:7px}
+  .ctool{height:27px; min-width:27px; padding:0 8px; border:1px solid var(--line); border-radius:8px;
+    background:transparent; color:var(--muted); font:inherit; font-size:11.5px; cursor:pointer;
+    display:flex; align-items:center; gap:5px; transition:.12s}
+  .ctool:hover{background:var(--hover); color:var(--fg)}
+  .ctool.on{background:var(--ink); color:var(--ink-fg); border-color:transparent}
+  .csend{margin-left:auto; width:30px; height:30px; border:0; border-radius:50%; background:var(--ink);
+    color:var(--ink-fg); cursor:pointer; display:grid; place-items:center; transition:.12s; flex:none}
+  .csend:disabled{opacity:.3; cursor:not-allowed}
+  .cnote{font-size:11px; color:var(--muted); margin-top:7px; line-height:1.5}
+
+  /* 展开成近全屏编辑器 */
+  #bigwrap[hidden]{display:none}
+  #bigwrap{position:fixed; inset:0; z-index:80; display:flex; align-items:center; justify-content:center; padding:3vh 3vw}
+  #bigwrap .mback{position:absolute; inset:0; background:var(--backdrop); backdrop-filter:blur(4px)}
+  .bigpanel{position:relative; display:flex; flex-direction:column; width:min(920px,100%); height:94vh;
+    background:var(--panel); border:1px solid var(--line); border-radius:18px; overflow:hidden;
+    box-shadow:0 30px 90px rgba(0,0,0,.45)}
+  .bighead{display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--line)}
+  .bighead .t{font-size:14.5px; font-weight:600}
+  .bigpanel textarea{flex:1; border:0; outline:none; resize:none; background:transparent; color:inherit;
+    font:inherit; font-size:15px; line-height:1.7; padding:18px 20px}
+  .bigfoot{display:flex; align-items:center; gap:8px; padding:12px 18px; border-top:1px solid var(--line)}
+  .bigfoot .n{font-size:11.5px; color:var(--muted); margin-right:auto}
+
+  /* 斜杠提示词菜单 */
+  .slash{position:absolute; left:14px; right:14px; bottom:calc(100% - 4px); z-index:5; max-height:250px;
+    overflow:auto; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    box-shadow:0 12px 40px rgba(0,0,0,.22)}
+  .slash .it{display:block; width:100%; text-align:left; padding:9px 12px; border:0; background:transparent;
+    color:inherit; font:inherit; font-size:13px; cursor:pointer; border-bottom:1px solid var(--line)}
+  .slash .it:last-child{border-bottom:0}
+  .slash .it:hover,.slash .it.sel{background:var(--hover)}
+  .slash .it .n{font-weight:600}
+  .slash .it .p{font-size:11.5px; color:var(--muted); margin-top:2px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis}
+  .slash .none{padding:11px 12px; font-size:12.5px; color:var(--muted)}
+
+  #big-namerow{padding:14px 20px 0}
+  #big-namerow[hidden]{display:none}
+
+  /* 提示词库 */
+  .libnew{width:100%; display:flex; align-items:center; justify-content:center; gap:7px;
+    padding:11px 0; margin-bottom:12px; border:1px dashed var(--line); background:transparent;
+    color:var(--muted); font:inherit; font-size:13px; font-weight:500; cursor:pointer; transition:.12s}
+  .libnew:hover{border-color:var(--muted); color:var(--fg); background:var(--hover)}
+  .lib .it{border:1px solid var(--line); padding:11px 12px; margin-bottom:8px; transition:.12s}
+  .lib .it:hover{border-color:var(--muted)}
+  .lib .it.cur{border-color:var(--ink)}
+  .cur-tag{margin-left:7px; padding:2px 7px; border-radius:999px; background:var(--ink);
+    color:var(--ink-fg); font-size:10px; font-weight:600; vertical-align:1px}
+  .aihead .ico.on{background:var(--ink); color:var(--ink-fg)}
+  .lib .it .n{font-size:13px; font-weight:600; overflow-wrap:anywhere}
+  .lib .it .p{font-size:11.5px; color:var(--muted); line-height:1.55; margin:4px 0 9px;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .lib .it .ops{display:flex; gap:6px; align-items:center}
+  .iconbtn{width:28px; height:28px; border:1px solid var(--line); border-radius:8px; background:transparent;
+    color:var(--muted); cursor:pointer; display:grid; place-items:center; transition:.12s; flex:none}
+  .iconbtn:hover{background:var(--hover); color:var(--fg); border-color:var(--muted)}
+  .iconbtn.ok{color:#1a7f4b; border-color:rgba(26,127,75,.4)}
+  .iconbtn.del{color:#fff; background:#e0392b; border-color:transparent}
+  .iconbtn.del:hover{background:#c0241a; color:#fff}
+  .lib .it .use{margin-right:auto; padding:5px 11px; width:auto; height:28px; border-radius:999px;
+    font-size:11.5px; display:flex; gap:5px}
+
   .lbl{display:block; font-size:12px; font-weight:600; color:var(--muted); margin:14px 0 6px; letter-spacing:.02em}
   .lbl:first-child{margin-top:0}
   .fi{width:100%; font-family:inherit; font-size:13.5px; font-weight:450; padding:9px 11px; color:inherit;
     border:1px solid var(--line); border-radius:8px; background:var(--bg); outline:none}
   .fi:focus{border-color:var(--muted)}
-  textarea.fi{resize:vertical; min-height:88px; line-height:1.5}
+  textarea.fi{resize:vertical; min-height:80px; line-height:1.55}
   select.fi{cursor:pointer}
-  .hint{font-size:11.5px; color:var(--muted); margin-top:5px; line-height:1.5}
+  .hint{font-size:11.5px; color:var(--muted); margin-top:5px; line-height:1.55}
   .grp{border:1px solid var(--line); padding:13px; margin-bottom:12px}
   .grp .gt{font-size:13px; font-weight:600; margin-bottom:2px}
   .grp .gh{font-size:11.5px; color:var(--muted); margin-bottom:10px}
   .row2{display:flex; gap:8px}
   .row2>*{flex:1; min-width:0}
-  .aifoot{display:flex; gap:8px; padding:13px 18px; border-top:1px solid var(--line)}
-  .aifoot .btn{flex:1; justify-content:center; text-align:center}
-  .prev{margin-top:14px; border:1px solid var(--line); background:var(--card)}
-  .prev img{display:block; width:100%; height:auto}
-  .prev .pf{padding:10px 12px; font-size:12px; color:var(--muted); border-top:1px solid var(--line)}
   .stat{font-size:12.5px; padding:9px 11px; margin-top:12px; border:1px solid var(--line); line-height:1.55}
   .stat.err{color:#e0392b; border-color:rgba(224,57,43,.32); background:rgba(224,57,43,.05)}
   .stat.ok{color:#1a7f4b; border-color:rgba(26,127,75,.3); background:rgba(26,127,75,.05)}
@@ -206,7 +314,21 @@
   .spin{display:inline-block; width:11px; height:11px; margin-right:7px; vertical-align:-1px;
     border:2px solid var(--line); border-top-color:var(--fg); border-radius:50%; animation:sp .7s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
-  @media(max-width:720px){#aiside{width:100%}}
+  .picks{display:flex; flex-wrap:wrap; gap:5px; margin-top:9px}
+  .pick{padding:4px 10px; border:1px solid var(--line); border-radius:999px; background:transparent;
+    color:var(--muted); font:inherit; font-size:11.5px; cursor:pointer; transition:.12s}
+  .pick:hover{border-color:var(--muted); color:var(--fg)}
+  .pick.on{background:var(--ink); color:var(--ink-fg); border-color:transparent}
+  /* 生成中：header 的 AI 按钮闪点，面板关着也知道后台在跑 */
+  #aibtn .dot{display:none; width:7px; height:7px; border-radius:50%; background:currentColor}
+  #aibtn.running .dot{display:inline-block; animation:pulse 1.1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+  @media(max-width:900px){
+    :root{--aiw:100vw}
+    body.ai-on header,body.ai-on nav.cats,body.ai-on main{padding-right:0}
+    body.ai-on #fab{display:none}      /* 侧栏全屏时没地方让 */
+    #aiside{z-index:60}
+  }
 </style>
 </head>
 <body>
@@ -221,7 +343,7 @@
     <div class="hctrl">
       <button class="hbtn" id="aibtn" hidden title="AI 生图">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
-        AI
+        AI<span class="dot"></span>
       </button>
       <button class="hbtn" id="auth">登录</button>
       <button class="hbtn icon" id="theme" title="夜间模式"></button>
@@ -237,20 +359,50 @@
   <input type="file" id="file" accept="image/*" multiple hidden>
   <div id="modal" hidden><div class="mback"></div><div class="mpanel" id="mpanel"></div></div>
 
-  <div id="aiwrap" hidden>
-    <div class="aiback"></div>
-    <aside id="aiside">
-      <div class="aihead">
-        <span class="t">AI 生图</span>
-        <span class="who" id="aiwho"></span>
-        <button class="x" id="aix" title="关闭"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  <aside id="aiside" hidden>
+    <div class="aigrip" id="aigrip" title="拖动调整宽度"></div>
+    <div class="aihead">
+      <span class="t">AI 生图</span>
+      <span class="who" id="aiwho"></span>
+      <button class="ico r" id="aihist" title="历史会话"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 6h18M3 12h18M3 18h12"/></svg></button>
+      <button class="ico" id="ainew" title="新建会话"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="ico" id="aix" title="收起"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="aitabs">
+      <button class="aitab on" data-tab="gen">对话</button>
+      <button class="aitab" data-tab="lib">提示词库</button>
+      <button class="aitab" data-tab="cfg">设置</button>
+    </div>
+    <div class="aibody" id="aibody"></div>
+    <div class="composer" id="composer" hidden>
+      <div id="slash"></div>
+      <div class="cbox">
+        <textarea id="c-in" rows="1" placeholder="描述要画的画面，或对上一张图说怎么改…（输入 / 调用提示词库）"></textarea>
+        <div class="ctools">
+          <button class="ctool" id="c-opt" title="让小模型把你的话扩写成完整提示词">✨ 优化</button>
+          <button class="ctool" id="c-big" title="放大编辑"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+          <button class="csend" id="c-go" title="生成"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+        </div>
       </div>
-      <div class="aitabs">
-        <button class="aitab on" data-tab="gen">生成</button>
-        <button class="aitab" data-tab="cfg">模型设置</button>
+      <div class="cnote" id="c-note"></div>
+    </div>
+  </aside>
+
+  <div id="bigwrap" hidden>
+    <div class="mback"></div>
+    <div class="bigpanel">
+      <div class="bighead">
+        <span class="t" id="big-title">编辑提示词</span>
+        <button class="ico r" id="big-x" title="关闭"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </div>
-      <div class="aibody" id="aibody"></div>
-    </aside>
+      <div id="big-namerow" hidden><input class="fi" id="big-name" placeholder="标题，如「电影感人像」"></div>
+      <textarea id="big-t" placeholder="在这里从容地写长提示词…"></textarea>
+      <div class="bigfoot">
+        <span class="n" id="big-n"></span>
+        <button class="btn" id="big-cancel">取消</button>
+        <button class="btn pri" id="big-ok">用这段</button>
+      </div>
+    </div>
   </div>
 
   <div id="loginpage" hidden>
@@ -302,8 +454,12 @@ function renderPills(){
 function makeCard(it){
   const fig=document.createElement('figure'); fig.className='card';
   fig.style.aspectRatio=(it.w||4)+' / '+(it.h||5);
-  const img=new Image(); img.loading='lazy'; img.alt=it.title||'';
-  img.onload=()=>img.classList.add('on'); img.src=it.src;
+  const img=new Image(); img.loading='lazy'; img.decoding='async'; img.alt=it.title||'';
+  // 卡片只加载缩略图（宽 ~300px 的格子不该下 2MB 原图）；原图留到点开详情再取。
+  // 加载完就撤掉 aspect-ratio 占位，让真实高度接管——元数据 w/h 缺失或不准的老图
+  // 会因为回落默认 4/5 而在图片下方露出一条灰边。
+  img.onload=()=>{img.classList.add('on'); fig.style.aspectRatio='';};
+  img.src=it.thumb||it.src;
   fig.appendChild(img);
   fig.insertAdjacentHTML('beforeend',
     (auth?'<button class="del" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>':'')+
@@ -328,9 +484,10 @@ function openDetail(id){
   const it=items.find(x=>x.id===id); if(!it)return;
   const tags=(it.keywords||'').split(/[,，\s]+/).filter(Boolean).map(k=>'<span class="tag">'+esc(k)+'</span>').join('');
   panel.classList.remove('narrow');
+  // 先铺缩略图（多半已在缓存里，秒开），原图后台解码好再换上，避免点开一片空白
   panel.innerHTML=
     '<button class="mclose" data-x><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>'+
-    '<div class="detail"><div class="imgwrap"><img src="'+it.src+'"></div>'+
+    '<div class="detail"><div class="imgwrap"><img id="dimg" src="'+(it.thumb||it.src)+'"></div>'+
     '<div class="side" id="dbody">'+
       '<div class="dt">'+esc(it.title||'未命名')+'</div>'+
       '<div class="dc">'+esc(it.cat||'未分类')+'</div>'+
@@ -344,6 +501,11 @@ function openDetail(id){
   if(auth){
     panel.querySelector('[data-edit]').onclick=()=>edit(it);
     panel.querySelector('[data-del]').onclick=()=>del(it.id);
+  }
+  if(it.thumb&&it.thumb!==it.src){
+    const hi=new Image();
+    hi.onload=()=>{const el=document.getElementById('dimg'); if(el)el.src=it.src;};
+    hi.src=it.src;
   }
   modal.hidden=false;
 }
@@ -381,15 +543,19 @@ function close(){modal.hidden=true;panel.innerHTML='';panel.classList.remove('na
 modal.querySelector('.mback').onclick=close;
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
   if(!modal.hidden)return close();
-  if(!aiWrap.hidden)closeAi();});
+  if(!bigWrap.hidden)return closeBig();
+  if(!aiSide.hidden)closeAi();});
 
 /* ── 登录 ──
    图库整体私有：未登录看不到列表也取不到图（服务端强制，前端这层只是体验）。 */
 function setAuth(t){auth=t||''; if(t)localStorage.setItem('atlas.auth',t); else localStorage.removeItem('atlas.auth');
   authBtn.textContent=auth?'退出':'登录';
   // 退出即刻抹掉内存里的图库，否则已渲染的缩略图还留在屏幕上
-  if(!auth){items=[]; aiAllowed=false; aiState.shot=null;
-    document.getElementById('aibtn').hidden=true; closeAi(true); if(!modal.hidden)close();}
+  // 退出即刻抹掉内存里的图库和这段 AI 对话，否则旧缩略图还留在屏幕上
+  if(!auth){items=[]; aiAllowed=false; chat=[]; sessions=[]; curSid=''; fullImg.clear();
+    localStorage.removeItem(CHATKEY); localStorage.removeItem(JOBKEY); claimed.clear();
+    clearInterval(aiPoll); aiPoll=null;
+    document.getElementById('aibtn').hidden=true; closeAi(); if(!modal.hidden)close();}
   render();}
 function on401(retry){setAuth(''); items=[]; render(); openLogin(retry);}
 
@@ -404,7 +570,29 @@ async function boot(){
   document.getElementById('aiwho').textContent=me.user;
   authBtn.textContent='退出';
   loginPage.hidden=true;
-  reload();
+  await reload();
+  backfillThumbs();
+  // 刷新页面 / 换台设备登录后，把还在后台跑的那张图接回来
+  if(aiAllowed)syncState();
+}
+
+/* 老图没有缩略图（是加缩略图机制之前入库的），登录后在后台逐张补齐：
+   取原图 → canvas 压 → 回传。串行且低优先，补完这张图以后就一直走缩略图了。 */
+async function backfillThumbs(){
+  const todo=items.filter(it=>!it.thumb||it.thumb===it.src);
+  if(!todo.length)return;
+  for(const it of todo){
+    try{
+      const blob=await (await fetch(it.src,{headers:wh()})).blob();
+      const url=URL.createObjectURL(blob);
+      const t=await thumbFor(url);
+      URL.revokeObjectURL(url);
+      if(!t.thumb)continue;
+      await fetch(API+'/thumb/'+it.id,{method:'POST',headers:wh(),
+        body:JSON.stringify({thumbURL:t.thumb,w:t.w,h:t.h})});
+    }catch(e){ /* 单张失败不影响其余，下次登录再试 */ }
+  }
+  await reload();
 }
 const loginPage=document.getElementById('loginpage');
 let loginAfter=null;
@@ -460,7 +648,10 @@ function openUpload(loaded){
     const btn=document.getElementById('u-add'); btn.disabled=true; btn.textContent='上传中…';
     for(const row of [...ub.children]){
       const it=row._d, g=f=>row.querySelector('[data-f="'+f+'"]').value.trim();
-      const body=JSON.stringify({dataURL:it.src,w:it.w,h:it.h,title:g('title'),cat:g('cat'),keywords:g('kw')});
+      // 顺手用 canvas 压一张缩略图一起传：服务端零依赖压不了图，列表全靠它提速
+      const t=await thumbFor(it.src);
+      const body=JSON.stringify({dataURL:it.src,thumbURL:t.thumb,w:it.w,h:it.h,
+        title:g('title'),cat:g('cat'),keywords:g('kw')});
       let r=await fetch(API+'/upload',{method:'POST',headers:wh(),body});
       if(r.status===401){ btn.disabled=false; btn.textContent='添加到图库'; return on401(()=>openUpload(loaded)); }
       if(!r.ok){ const e=await r.json().catch(()=>({})); alert('上传失败：'+(e.error||r.status)); btn.disabled=false; btn.textContent='添加到图库'; return; }
@@ -474,186 +665,606 @@ document.getElementById('q').addEventListener('input',e=>{query=e.target.value.t
 
 /* ── AI 生图工作台 ─────────────────────────────────────────────
    只有服务端 AI 白名单里的账号才拿得到入口；前端隐藏只是体验，
-   /api/ai/* 每一次都会再校验一遍身份。 */
-const AIKEY='atlas.ai';
-let aiAllowed=false, aiTab='gen', aiSys={}, aiBusy=false;
-const aiState={prompt:'',size:'1024x1024',model:'',shot:null,msg:null,cmsg:null};
-const aiWrap=document.getElementById('aiwrap'), aiBody=document.getElementById('aibody');
+   /api/ai/* 每一次都会再校验一遍身份。
+
+   生图跑在服务端后台线程，这里只轮询 /api/ai/state。所以收起面板、切标签页、
+   甚至刷新页面，那张图都还在生成，回来就能接上——否则连接一断，额度已经扣了，
+   图却拿不回来。 */
+const AIKEY='atlas.ai', CHATKEY='atlas.ai.chat', LIBKEY='atlas.ai.lib';
+let aiAllowed=false, aiTab='gen', aiSys={}, aiBusy=false, aiPoll=null, aiPicks=[], pendingTpl='';
+let chat=[];                      // [{id,role:'u'|'a',text,thumb,revised,model,via,title,cat,keywords,itemId}]
+const fullImg=new Map();          // id → 原图 dataURL（只在内存；localStorage 存不下几 MB 的图）
+const claimed=new Set();          // 已认领的 job id，防并发轮询把同一张图插两次
+const JOBKEY='atlas.ai.job';
+/* 服务端的生成状态是全局长驻的：不锁定「这是我这次发起的 job」，登录时就会把很久以前
+   那次的 done 结果又认领一遍，凭空多出一张旧图。存 localStorage 是为了刷新后还认得。 */
+const myJob=()=>localStorage.getItem(JOBKEY)||'';
+const setMyJob=j=>j?localStorage.setItem(JOBKEY,j):localStorage.removeItem(JOBKEY);
+const aiSide=document.getElementById('aiside'), aiBody=document.getElementById('aibody'),
+      composer=document.getElementById('composer'), cin=document.getElementById('c-in'),
+      cnote=document.getElementById('c-note'), aiBtn=document.getElementById('aibtn');
 
 function aiCfg(){try{return JSON.parse(localStorage.getItem(AIKEY))||{};}catch(e){return {};}}
 function aiCreds(){const c=aiCfg();return{baseUrl:(c.baseUrl||'').trim(),apiKey:(c.apiKey||'').trim()};}
-function aiModels(){const l=(aiCfg().imageModels||'').split(',').map(s=>s.trim()).filter(Boolean);
-  return l.length?l:(aiSys.imageModels||[]);}
-function aiVision(){return (aiCfg().visionModel||'').trim()||aiSys.visionModel||'';}
+function aiSplit(s){return (s||'').split(/[,，]/).map(x=>x.trim()).filter(Boolean);}
+/* 自己填的优先。留空才回落服务器默认——但仅限「接口也没自定义」时：
+   换了自己的网关，服务器那套模型名（属于另一个网关）拿过去必然打不通。 */
+function aiOwnGateway(){return !!(aiCfg().baseUrl||'').trim();}
+function aiModels(){const l=aiSplit(aiCfg().imageModels);
+  return l.length?l:(aiOwnGateway()?[]:(aiSys.imageModels||[]));}
+function curModel(){const ms=aiModels(), m=aiCfg().model;
+  return ms.indexOf(m)>=0?m:(ms[0]||'');}
 
-/* 自己填的 baseUrl/apiKey 随请求走，服务端留空则回落它的默认配置 */
 async function aiPost(path,body){
   const r=await fetch(API+'/ai/'+path,{method:'POST',headers:wh(),
     body:JSON.stringify(Object.assign(aiCreds(),body||{}))});
   const d=await r.json().catch(()=>({}));
   if(r.status===401){on401(()=>boot());throw new Error('登录已过期');}
+  if(!r.ok&&r.status!==202)throw new Error(d.error||('HTTP '+r.status));
+  return d;
+}
+async function aiGet(path){
+  const r=await fetch(API+'/ai/'+path,{headers:wh()});
+  const d=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
   return d;
 }
-function aiMsg(where,kind,text){aiState[where]=text?{k:kind,t:text}:null;aiRender();}
 
+/* ── 会话与历史 ────────────────────────────────────────────────
+   模型跟本系统的 AiChat 一致：一条会话 = 一个对话线程，标题由首条用户消息截断生成，
+   按更新时间倒序。会话之间互相隔离，新建不会动到旧的。
+   一张生成图 2MB+，localStorage 总共才 5–10MB，所以持久化的是缩略图
+   （长边 320 的 JPEG，约 20KB）；原图只在内存，刷新后没了，已入库的可以从图库看。 */
+const MAX_SESS=20, MAX_MSG=40;
+let sessions=[], curSid='';
+function sessLoad(){
+  try{const d=JSON.parse(localStorage.getItem(CHATKEY))||{};
+    sessions=Array.isArray(d.sessions)?d.sessions:[];
+    curSid=d.cur||'';
+  }catch(e){sessions=[];curSid='';}
+  if(!sessions.length){newSession(true);}
+  else if(!sessions.some(s=>s.id===curSid))curSid=sessions[0].id;
+  chat=(sessions.find(s=>s.id===curSid)||{msgs:[]}).msgs;
+}
+function sessSave(){
+  const s=sessions.find(x=>x.id===curSid);
+  if(s){s.msgs=chat; s.ts=Date.now();
+    // 标题取首条用户消息，和本系统 AiChat.title 的生成方式一致
+    if(!s.named){const u=chat.find(m=>m.role==='u');
+      if(u){s.title=u.text.slice(0,20)+(u.text.length>20?'…':'');s.named=true;}}}
+  sessions.sort((a,b)=>b.ts-a.ts);
+  sessions=sessions.slice(0,MAX_SESS);
+  const write=()=>localStorage.setItem(CHATKEY,JSON.stringify({cur:curSid,sessions}));
+  try{write();}
+  catch(e){ // 配额爆了：先砍每会话消息数，再砍会话数，实在不行只留当前这条
+    sessions.forEach(x=>x.msgs=x.msgs.slice(-10));
+    try{write();}catch(e2){
+      sessions=sessions.filter(x=>x.id===curSid);
+      try{write();}catch(e3){}
+    }
+  }
+}
+function chatSave(){sessSave();}
+function newSession(silent){
+  const id='s'+Date.now()+Math.random().toString(36).slice(2,6);
+  sessions.unshift({id,title:'新会话',ts:Date.now(),named:false,msgs:[]});
+  curSid=id; chat=sessions[0].msgs;
+  if(!silent){sessSave(); aiTab='gen'; aiRender(); setTimeout(()=>cin&&cin.focus(),50);}
+}
+function switchSession(id){
+  const s=sessions.find(x=>x.id===id); if(!s)return;
+  curSid=id; chat=s.msgs; sessSave(); aiTab='gen'; aiRender();
+}
+function delSession(id){
+  const i=sessions.findIndex(x=>x.id===id); if(i<0)return;
+  sessions[i].msgs.forEach(m=>fullImg.delete(m.id));
+  sessions.splice(i,1);
+  if(!sessions.length)newSession(true);
+  if(!sessions.some(x=>x.id===curSid))curSid=sessions[0].id;
+  chat=sessions.find(x=>x.id===curSid).msgs;
+  sessSave(); aiRender();
+}
+function thumbOf(dataURL){
+  return new Promise(res=>{const i=new Image();
+    i.onload=()=>{const s=320/Math.max(i.naturalWidth,i.naturalHeight,1), sc=Math.min(1,s);
+      const cv=document.createElement('canvas');
+      cv.width=Math.max(1,Math.round(i.naturalWidth*sc)); cv.height=Math.max(1,Math.round(i.naturalHeight*sc));
+      cv.getContext('2d').drawImage(i,0,0,cv.width,cv.height);
+      res({thumb:cv.toDataURL('image/jpeg',.72),w:i.naturalWidth,h:i.naturalHeight});};
+    i.onerror=()=>res({thumb:'',w:0,h:0}); i.src=dataURL;});
+}
+/* 缩略图只在真的更小时才用：本来就很小的图（图标、纯色块）压成 JPEG 可能反而变大，
+   那就不生成，让它直接走原图——服务端 out_item 会自动回落。 */
+async function thumbFor(dataURL){
+  const t=await thumbOf(dataURL);
+  if(t.thumb&&t.thumb.length>=dataURL.length)t.thumb='';
+  return t;
+}
+
+/* 展示用大图：内存里有原图就用原图，否则退回缩略图 */
+function srcOf(m){return fullImg.get(m.id)||m.thumb||'';}
+function lastShot(){for(let i=chat.length-1;i>=0;i--)if(chat[i].role==='a')return chat[i];return null;}
+
+/* ── 面板开关（挤压式，不遮盖主页面）── */
 async function openAi(){
   if(!aiAllowed)return;
-  aiWrap.hidden=false;
-  if(!aiSys.baseUrl){
-    try{const r=await fetch(API+'/ai/config',{headers:wh()}); if(r.ok)aiSys=await r.json();}catch(e){}
-  }
-  aiRender();
+  aiSide.hidden=false; document.body.classList.add('ai-on');
+  if(!aiSys.baseUrl){try{aiSys=await aiGet('config');}catch(e){}}
+  aiRender(); syncState();
+  setTimeout(()=>cin&&cin.focus(),60);
 }
-function closeAi(force){
-  if(aiBusy&&!force){
-    if(!confirm('正在生成图片，关闭面板不会取消它（额度已经花了）。仍要关闭？'))return;
-  }
-  aiWrap.hidden=true;
+function closeAi(){ aiSide.hidden=true; document.body.classList.remove('ai-on'); }
+/* 收起不打断生成：轮询继续跑，AI 按钮上的点还在闪 */
+aiBtn.onclick=()=>aiSide.hidden?openAi():closeAi();
+document.getElementById('aix').onclick=closeAi;
+/* 拖左边缘调宽度：只改 --aiw，主内容的 padding 是由它算出来的，所以拖动即实时挤压 */
+const WKEY='atlas.ai.w';
+function setAiW(px){
+  const w=Math.round(Math.max(340,Math.min(px,Math.min(900,innerWidth*0.72))));
+  document.documentElement.style.setProperty('--aiw',w+'px');
+  return w;
 }
-document.getElementById('aibtn').onclick=openAi;
-document.getElementById('aix').onclick=()=>closeAi();
-aiWrap.querySelector('.aiback').onclick=()=>closeAi();
+(function(){
+  const saved=parseInt(localStorage.getItem(WKEY)||'',10);
+  if(saved&&innerWidth>900)setAiW(saved);
+  const grip=document.getElementById('aigrip');
+  let on=false;
+  grip.addEventListener('pointerdown',e=>{
+    if(innerWidth<=900)return;                 // 窄屏是全宽面板，没得拉
+    on=true; grip.setPointerCapture(e.pointerId);
+    document.body.classList.add('aidrag'); e.preventDefault();
+  });
+  grip.addEventListener('pointermove',e=>{ if(on)setAiW(innerWidth-e.clientX); });
+  const stop=()=>{ if(!on)return; on=false; document.body.classList.remove('aidrag');
+    localStorage.setItem(WKEY,parseInt(getComputedStyle(document.documentElement).getPropertyValue('--aiw'),10)||420); };
+  grip.addEventListener('pointerup',stop);
+  grip.addEventListener('pointercancel',stop);
+  grip.addEventListener('dblclick',()=>{setAiW(420);localStorage.setItem(WKEY,420);});
+})();
+
+/* 加号 = 新开一条会话（旧的原样留在历史里），不是清空当前对话 */
+document.getElementById('ainew').onclick=()=>{
+  const cur=sessions.find(s=>s.id===curSid);
+  if(cur&&!cur.msgs.length){aiTab='gen';aiRender();return cin&&cin.focus();}  // 已经是空会话就别再开一条
+  newSession();
+};
+document.getElementById('aihist').onclick=()=>{aiTab=aiTab==='hist'?'gen':'hist';aiRender();};
 document.querySelectorAll('.aitab').forEach(b=>b.onclick=()=>{aiTab=b.dataset.tab;aiRender();});
 
 function aiRender(){
   document.querySelectorAll('.aitab').forEach(b=>b.classList.toggle('on',b.dataset.tab===aiTab));
-  if(aiTab==='gen'){aiBody.innerHTML=genHTML();bindGen();}
+  composer.hidden=aiTab!=='gen';
+  document.getElementById('aihist').classList.toggle('on',aiTab==='hist');
+  if(aiTab==='gen'){renderChat();}
+  else if(aiTab==='hist'){aiBody.innerHTML=histHTML();bindHist();}
+  else if(aiTab==='lib'){aiBody.innerHTML=libHTML();bindLib();}
   else{aiBody.innerHTML=cfgHTML();bindCfg();}
 }
-function statHTML(m){return m?'<div class="stat '+m.k+'">'+(m.k==='busy'?'<span class="spin"></span>':'')+esc(m.t)+'</div>':'';}
-function opts(list,cur){return list.map(v=>'<option'+(v===cur?' selected':'')+'>'+esc(v)+'</option>').join('');}
 
-function genHTML(){
+function fmtTime(ts){
+  const d=new Date(ts), n=new Date(), pad=x=>String(x).padStart(2,'0');
+  const sameDay=d.toDateString()===n.toDateString();
+  return sameDay?('今天 '+pad(d.getHours())+':'+pad(d.getMinutes()))
+                :(pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes()));
+}
+function histHTML(){
+  return '<div class="hint">每条会话互相独立，切换不会丢上下文。只存在你这台设备的浏览器里，最多保留 '+MAX_SESS+' 条。</div>'+
+    '<button class="libnew" id="h-new" style="margin-top:14px">'+ICON.plus+'新建会话</button>'+
+    '<div class="lib">'+sessions.map(s=>{
+      const imgs=s.msgs.filter(m=>m.role==='a').length;
+      return '<div class="it'+(s.id===curSid?' cur':'')+'"><div class="n">'+esc(s.title||'新会话')+
+        (s.id===curSid?'<span class="cur-tag">当前</span>':'')+'</div>'+
+        '<div class="p">'+fmtTime(s.ts)+' · '+s.msgs.length+' 条消息 · '+imgs+' 张图</div>'+
+        '<div class="ops"><button class="iconbtn use" data-s="'+s.id+'" data-a="open">'+ICON.arrow+'打开</button>'+
+        '<button class="iconbtn del" data-s="'+s.id+'" data-a="del" title="删除会话">'+ICON.trash+'</button></div></div>';
+    }).join('')+'</div>';
+}
+function bindHist(){
+  document.getElementById('h-new').onclick=()=>newSession();
+  aiBody.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.s;
+    if(b.dataset.a==='open')switchSession(id);
+    else{const s=sessions.find(x=>x.id===id);
+      if(confirm('删除会话「'+(s&&s.title||'')+'」？已入库的图不受影响'))delSession(id);}
+  });
+}
+
+/* ── 对话流 ── */
+function renderChat(){
   const ms=aiModels();
-  if(!ms.length)return '<div class="stat err">还没有可用的生图模型。先到「模型设置」填接口地址和 Key，再拉取模型。</div>';
-  if(ms.indexOf(aiState.model)<0)aiState.model=ms[0];
-  return '<label class="lbl">画面描述</label>'+
-    '<textarea class="fi" id="g-p" placeholder="例：一只戴眼镜的橘猫在窗边看书，暖色调，插画风">'+esc(aiState.prompt)+'</textarea>'+
-    '<div class="row2"><div><label class="lbl">生图模型</label><select class="fi" id="g-m">'+opts(ms,aiState.model)+'</select></div>'+
-    '<div><label class="lbl">尺寸</label><select class="fi" id="g-s">'+opts(['1024x1024','1536x1024','1024x1536'],aiState.size)+'</select></div></div>'+
-    '<div class="hint">一张通常要 1–4 分钟。为避免重复计费，同一时间只允许一张在生成，失败也不会自动重试。</div>'+
-    '<button class="btn pri" id="g-go" style="width:100%;margin-top:12px"'+(aiBusy?' disabled':'')+'>'+(aiBusy?'生成中…':'生成')+'</button>'+
-    statHTML(aiState.msg)+(aiState.shot?shotHTML():'');
+  if(!ms.length){
+    aiBody.innerHTML='<div class="stat err">'+(aiOwnGateway()
+      ? '你填了自己的接口地址，就必须同时填「生图模型」——模型名跟着网关走，服务器默认那组属于另一个网关，拿过来打不通。'
+      : '还没有可用的生图模型，去「设置」里填一个。')+'</div>';
+    return;
+  }
+  if(!chat.length){
+    aiBody.innerHTML='<div class="empty-chat"><b>说一句，画一张</b>'+
+      '描述你想要的画面，出图后可以接着说「背景换成夜晚」<br>它会带着上一张图和这段对话继续改。<br><br>'+
+      '输入 <b style="display:inline;font-size:12.5px">/</b> 可以调用提示词库。</div>';
+    return;
+  }
+  const box=document.createElement('div'); box.className='msgs';
+  chat.forEach(m=>box.appendChild(m.role==='u'?userNode(m):shotNode(m)));
+  aiBody.innerHTML=''; aiBody.appendChild(box);
+  aiBody.scrollTop=aiBody.scrollHeight;
 }
-function shotHTML(){
-  const s=aiState.shot;
-  return '<div class="prev"><img src="'+s.dataURL+'">'+(s.revised?'<div class="pf">'+esc(s.revised.slice(0,200))+'</div>':'')+'</div>'+
-    '<label class="lbl">标题</label><input class="fi" id="s-t" value="'+esc(s.title||'')+'">'+
-    '<label class="lbl">分类</label><input class="fi" id="s-c" list="catlist2" value="'+esc(s.cat||'')+'">'+
-    '<label class="lbl">关键词</label><input class="fi" id="s-k" value="'+esc(s.keywords||'')+'">'+
-    '<datalist id="catlist2">'+cats().map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist>'+
-    '<div class="row2" style="margin-top:14px">'+
-      '<button class="btn" id="s-tag"'+(aiBusy?' disabled':'')+'>AI 自动分类</button>'+
-      '<button class="btn pri" id="s-add"'+(aiBusy?' disabled':'')+'>加入图库</button></div>';
+function userNode(m){
+  const d=document.createElement('div'); d.className='msg u'; d.textContent=m.text; return d;
 }
-function keepGen(){const p=document.getElementById('g-p');if(p)aiState.prompt=p.value;
-  const m=document.getElementById('g-m');if(m)aiState.model=m.value;
-  const s=document.getElementById('g-s');if(s)aiState.size=s.value;
-  const t=document.getElementById('s-t');if(t&&aiState.shot)aiState.shot.title=t.value;
-  const c=document.getElementById('s-c');if(c&&aiState.shot)aiState.shot.cat=c.value;
-  const k=document.getElementById('s-k');if(k&&aiState.shot)aiState.shot.keywords=k.value;}
+function shotNode(m){
+  const d=document.createElement('div'); d.className='msg a';
+  const src=srcOf(m), has=!!fullImg.get(m.id);
+  d.innerHTML=(m.tpl?'<div class="tplbadge">'+esc(m.tpl)+'</div>':'')+
+    (m.revised?'<div class="rp">'+esc(m.revised)+'</div>':'')+
+    '<div class="shot">'+(src?'<img src="'+src+'" alt="">':'')+
+      '<div class="tagfields">'+
+        '<input class="fi" data-f="title" placeholder="标题" value="'+esc(m.title||'')+'">'+
+        '<div class="row2">'+
+          '<input class="fi" data-f="cat" placeholder="分类" list="catlist3" value="'+esc(m.cat||'')+'">'+
+          '<input class="fi" data-f="keywords" placeholder="关键词" value="'+esc(m.keywords||'')+'">'+
+        '</div>'+
+      '</div>'+
+      '<div class="meta">'+
+        '<button class="mini" data-a="tag"'+(has?'':' disabled')+'>AI 分类</button>'+
+        '<button class="mini" data-a="edit">继续改这张</button>'+
+        (m.itemId?'<button class="mini done" data-a="open">✓ 已入库</button>'
+                 :'<button class="mini go" data-a="add"'+(has?'':' disabled')+'>加入图库</button>')+
+        '<span class="mini" style="border:0;color:var(--muted);cursor:default">'+esc(m.model||'')+(m.via?' · '+esc(m.via):'')+'</span>'+
+      '</div>'+
+    '</div><datalist id="catlist3">'+cats().map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist>';
+  const img=d.querySelector('img');
+  if(img)img.onclick=()=>zoom(m);
+  d.querySelectorAll('[data-f]').forEach(el=>el.onchange=()=>{
+    m[el.dataset.f]=el.value.trim(); chatSave();});
+  d.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{
+    const a=b.dataset.a;
+    if(a==='tag')autoTag(m);
+    else if(a==='add')addToGallery(m);
+    else if(a==='open'){closeAi();openDetail(m.itemId);}
+    else if(a==='edit'){cin.value='';cin.placeholder='说说这张要怎么改…';cin.focus();}
+  });
+  return d;
+}
+/* 点图放大：复用图库那套 modal */
+function zoom(m){
+  const src=srcOf(m); if(!src)return;
+  panel.classList.remove('narrow');
+  panel.innerHTML='<button class="mclose" data-x><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>'+
+    '<div class="detail"><div class="imgwrap"><img src="'+src+'"></div>'+
+    '<div class="side"><div class="dt">'+esc(m.title||'未命名')+'</div>'+
+    '<div class="dc">'+esc(m.model||'')+(m.via?' · '+esc(m.via):'')+(fullImg.get(m.id)?'':' · 原图已随刷新丢失，这是缩略图')+'</div>'+
+    (m.revised?'<div class="tags" style="font-size:12.5px;color:var(--muted);line-height:1.6">'+esc(m.revised)+'</div>':'')+
+    '<div class="actions"><button class="btn pri" data-dl>下载</button></div></div></div>';
+  panel.querySelector('[data-x]').onclick=close;
+  panel.querySelector('[data-dl]').onclick=()=>{
+    const a=document.createElement('a'); a.href=src;
+    a.download=(m.title||'ai-image').replace(/[^\w一-龥-]+/g,'_')+'.png';
+    document.body.appendChild(a); a.click(); a.remove();};
+  modal.hidden=false;
+}
 
-function bindGen(){
-  const go=document.getElementById('g-go'); if(!go)return;
-  ['g-p','g-m','g-s','s-t','s-c','s-k'].forEach(id=>{const el=document.getElementById(id);
-    if(el)el.addEventListener('change',keepGen);});
-  go.onclick=async()=>{
-    keepGen();
-    if(!aiState.prompt.trim())return aiMsg('msg','err','先写点画面描述');
-    if(aiBusy)return;                                   // 防连点：后端也有锁，这里省一次往返
-    aiBusy=true; aiState.shot=null;
-    const t0=Date.now();
-    const tick=setInterval(()=>aiMsg('msg','busy','生成中… 已用 '+Math.round((Date.now()-t0)/1000)+' 秒，请勿关闭'),1000);
-    aiMsg('msg','busy','生成中… 请勿关闭');
+/* ── 发送：优化提示词 → 启动后台生图 → 轮询 ── */
+function note(t,kind){cnote.innerHTML=t?((kind==='busy'?'<span class="spin"></span>':'')+esc(t)):'';
+  cnote.style.color=kind==='err'?'#e0392b':'';}
+function setBusy(b){
+  aiBusy=b;
+  document.getElementById('c-go').disabled=b;
+  aiBtn.classList.toggle('running',b);
+}
+async function send(){
+  const text=cin.value.trim();
+  if(!text)return;
+  if(aiBusy)return note('已有一张在生成中，等它完成（避免重复计费）','err');
+  const ms=aiModels(); if(!ms.length){aiTab='cfg';return aiRender();}
+  cin.value=''; autoGrow();
+  chat.push({id:'u'+Date.now(),role:'u',text}); chatSave(); renderChat();
+  setBusy(true);
+  let prompt=text;
+  try{
+    if(document.getElementById('c-opt').classList.contains('on')){
+      note('正在挑模板、优化提示词…','busy');
+      const prev=lastShot();
+      const d=await aiPost('prompt',{input:text,
+        turns:chat.slice(-7).map(m=>({role:m.role==='a'?'image':'user',text:m.role==='a'?(m.revised||m.text||''):m.text})),
+        dataURL:prev?fullImg.get(prev.id)||'':'',
+        // 接着改同一张图时沿用上一轮的模板，别中途换风格体系
+        template:prev?(prev.template||''):'', keepTemplate:!!prev});
+      prompt=d.prompt||text;
+      pendingTpl=d.templateTitle||'';
+      if(pendingTpl)note('已选模板「'+pendingTpl+'」，提交生成中…','busy');
+    }else pendingTpl='';
+    note('已提交，后台生成中…','busy');
+    const started=await aiPost('image',{prompt,model:curModel(),size:aiCfg().size||'1024x1024'});
+    setMyJob(started.job||'');
+    startPoll();
+  }catch(e){
+    setBusy(false); note(String(e.message||e),'err');
+  }
+}
+function startPoll(){
+  clearInterval(aiPoll);
+  aiPoll=setInterval(syncState,2000);
+  syncState();
+}
+/* 唯一的真相来源是服务端状态：刷新页面、换设备、重开面板都靠它接回来。
+   自身防重入：boot / openAi / 定时器都会调它，重入会并发跑同一段结果处理。 */
+let syncing=false;
+async function syncState(){ if(syncing)return; syncing=true;
+  try{ await syncStateInner(); } finally { syncing=false; }
+}
+async function syncStateInner(){
+  let s; try{s=await aiGet('state');}catch(e){return;}
+  if(s.status==='running'&&s.job===myJob()){
+    setBusy(true);
+    if(!aiPoll)startPoll();
+    note('生成中… 已 '+s.elapsed+' 秒，可以收起面板或做别的，不会中断','busy');
+    return;
+  }
+  clearInterval(aiPoll); aiPoll=null;
+  if(s.job!==myJob()){setBusy(false);return;}          // 不是我这次发起的，不认领
+  if(s.status==='error'){setMyJob('');setBusy(false);return note(s.error||'生成失败','err');}
+  if(s.status==='done'&&s.ready){
+    // 按服务端的 job id 去重：同一句提示词再生成一次是正常操作，不能拿 prompt 当 key。
+    // claimed 必须在 await 之前同步占位——boot / openAi / 轮询都会调进来，
+    // 只查 chat 的话两个并发调用会同时通过检查，同一张图被插两次。
+    if(claimed.has(s.job)||chat.some(m=>m.job&&m.job===s.job)){setBusy(false);return;}
+    claimed.add(s.job);
     try{
-      const d=await aiPost('image',{prompt:aiState.prompt,model:aiState.model,size:aiState.size});
-      aiState.shot={dataURL:d.dataURL,revised:d.revised_prompt||'',title:'',cat:'',keywords:''};
-      clearInterval(tick); aiBusy=false;
-      aiMsg('msg','ok','生成完成（'+Math.round((Date.now()-t0)/1000)+' 秒）· '+d.model);
-      autoTag();                                        // 顺手让小模型把分类填上
-    }catch(e){
-      clearInterval(tick); aiBusy=false;
-      aiMsg('msg','err',String(e.message||e));
-    }
-  };
-  const tag=document.getElementById('s-tag'); if(tag)tag.onclick=()=>{keepGen();autoTag();};
-  const add=document.getElementById('s-add'); if(add)add.onclick=addToGallery;
+      const r=await aiGet('result');
+      const {thumb}=await thumbOf(r.dataURL);
+      const id='a'+Date.now();
+      fullImg.set(id,r.dataURL);
+      const m={id,role:'a',text:r.prompt||'',revised:r.revised_prompt||r.prompt||'',
+               thumb,model:r.model||'',via:r.via||'',title:'',cat:'',keywords:'',
+               tpl:pendingTpl,job:s.job};
+      pendingTpl='';
+      setMyJob('');                                     // 结果已消费，别再认领第二次
+      chat.push(m); chatSave(); renderChat();
+      setBusy(false); note('生成完成（'+s.elapsed+' 秒）');
+      autoTag(m);
+    }catch(e){claimed.delete(s.job);setBusy(false);note('取结果失败：'+(e.message||e),'err');}
+    return;
+  }
+  setBusy(false);
 }
 
-/* 视觉小模型当分类 agent：看图 → 标题/分类/关键词，并把现有分类喂给它以便复用而不是乱造新分类 */
-async function autoTag(){
-  if(!aiState.shot||aiBusy)return;
-  if(!aiVision())return aiMsg('msg','err','未配置视觉模型，无法自动分类');
-  aiBusy=true; aiMsg('msg','busy','AI 正在看图分类…');
+/* 视觉小模型当分类 agent：看图 → 标题/分类/关键词，并把现有分类喂给它以便复用 */
+async function autoTag(m){
+  const src=fullImg.get(m.id); if(!src)return;
+  note('AI 正在看图分类…','busy');
   try{
-    const d=await aiPost('tag',{dataURL:aiState.shot.dataURL,model:aiVision(),cats:cats().join(',')});
-    Object.assign(aiState.shot,{title:d.title||'',cat:d.cat||'',keywords:d.keywords||''});
-    aiBusy=false; aiMsg('msg','ok','已自动填写，可手动修改后入库');
-  }catch(e){aiBusy=false;aiMsg('msg','err','自动分类失败：'+(e.message||e));}
+    const d=await aiPost('tag',{dataURL:src,cats:cats().join(',')});
+    Object.assign(m,{title:d.title||'',cat:d.cat||'',keywords:d.keywords||''});
+    chatSave(); renderChat(); note('已自动填好标题分类，可改后入库');
+  }catch(e){note('自动分类失败：'+(e.message||e),'err');}
 }
 
-async function addToGallery(){
-  keepGen();
-  const s=aiState.shot; if(!s)return;
-  aiBusy=true; aiMsg('msg','busy','正在加入图库…');
+async function addToGallery(m){
+  const src=fullImg.get(m.id);
+  if(!src)return note('原图已随页面刷新丢失，无法入库','err');
+  note('正在加入图库…','busy');
   try{
+    // 必须带上真实宽高：卡片用 aspect-ratio 占位，缺了就回落默认 4/5，
+    // 方图会被拉成 4:5，底下露出一条灰边。
+    const {w,h,thumb}=await thumbFor(src);
     const r=await fetch(API+'/upload',{method:'POST',headers:wh(),body:JSON.stringify(
-      {dataURL:s.dataURL,title:s.title||'AI 生成',cat:s.cat||'',keywords:s.keywords||''})});
-    if(r.status===401){aiBusy=false;return on401(()=>boot());}
+      {dataURL:src,thumbURL:thumb,w,h,title:m.title||'AI 生成',cat:m.cat||'',keywords:m.keywords||''})});
+    if(r.status===401)return on401(()=>boot());
     const d=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
-    aiBusy=false; aiState.shot=null; aiState.msg=null;
-    await reload(); aiMsg('msg','ok','已加入图库');
-  }catch(e){aiBusy=false;aiMsg('msg','err','入库失败：'+(e.message||e));}
+    m.itemId=d.id; chatSave();
+    await reload(); renderChat(); note('已加入图库');
+  }catch(e){note('入库失败：'+(e.message||e),'err');}
 }
 
-function cfgHTML(){
-  const c=aiCfg();
-  return '<div class="hint">兼容 OpenAI 接口。留空即用服务器默认'+(aiSys.keyCount?'（已配 '+aiSys.keyCount+' 个 Key，轮换使用）':'')+
-    '。这里填的内容只存在你这台设备的浏览器里，不上传保存。</div>'+
-    '<div class="grp" style="margin-top:14px"><div class="gt">接口</div><div class="gh">网关地址与密钥</div>'+
-      '<label class="lbl">Base URL</label><input class="fi" id="c-b" placeholder="'+esc(aiSys.baseUrl||'https://…')+'" value="'+esc(c.baseUrl||'')+'">'+
-      '<label class="lbl">API Key</label><input class="fi" id="c-k" type="password" autocomplete="new-password" placeholder="'+
-        (aiSys.keyCount?'服务器默认已配 '+aiSys.keyCount+' 个':'sk-…')+'" value="'+esc(c.apiKey||'')+'">'+
-      '<div class="hint">多个 Key 用英文逗号分隔，每次请求轮换；某个 Key 被拒会自动换下一个。</div></div>'+
-    '<div class="grp"><div class="gt">生图模型</div><div class="gh">可填多个，生成页下拉切换</div>'+
-      '<input class="fi" id="c-i" placeholder="'+esc((aiSys.imageModels||[]).join(', ')||'gpt-image-2, …')+'" value="'+esc(c.imageModels||'')+'">'+
-      '<button class="btn" id="c-pull" style="width:100%;margin-top:10px">从接口拉取可用模型</button></div>'+
-    '<div class="grp"><div class="gt">视觉模型</div><div class="gh">看图自动生成标题 / 分类 / 关键词</div>'+
-      '<input class="fi" id="c-v" placeholder="'+esc(aiSys.visionModel||'gpt-5.4-mini')+'" value="'+esc(c.visionModel||'')+'"></div>'+
-    '<div class="row2"><button class="btn" id="c-test">测试连接</button><button class="btn pri" id="c-save">保存</button></div>'+
-    statHTML(aiState.cmsg);
+/* ── 输入框：自增高、Enter 发送、放大编辑、/ 唤起提示词库 ── */
+function autoGrow(){cin.style.height='auto';cin.style.height=Math.min(180,cin.scrollHeight)+'px';}
+cin.addEventListener('input',()=>{autoGrow();slashUpdate();});
+cin.addEventListener('keydown',e=>{
+  const menu=document.getElementById('slash').firstChild;
+  if(menu&&menu.className==='slash'){
+    const its=[...menu.querySelectorAll('.it')];
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      e.preventDefault();
+      let i=its.findIndex(x=>x.classList.contains('sel'));
+      i=(i+(e.key==='ArrowDown'?1:-1)+its.length)%(its.length||1);
+      its.forEach(x=>x.classList.remove('sel')); if(its[i]){its[i].classList.add('sel');its[i].scrollIntoView({block:'nearest'});}
+      return;
+    }
+    if(e.key==='Enter'&&its.length){e.preventDefault();(its.find(x=>x.classList.contains('sel'))||its[0]).click();return;}
+    if(e.key==='Escape'){slashClose();return;}
+  }
+  if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send();}
+});
+document.getElementById('c-go').onclick=send;
+document.getElementById('c-opt').onclick=e=>{
+  const on=e.currentTarget.classList.toggle('on');
+  localStorage.setItem('atlas.ai.opt',on?'1':'0');
+  note(on?'开启后：先让小模型把你的话扩写成完整提示词，再拿去生图':'关闭后：原样把你写的文字送去生图');
+};
+if(localStorage.getItem('atlas.ai.opt')!=='0')document.getElementById('c-opt').classList.add('on');
+
+/* 同一个近全屏编辑器服务两种场景：放大写对话提示词，以及新建/编辑提示词库条目 */
+const bigWrap=document.getElementById('bigwrap'), bigT=document.getElementById('big-t'),
+      bigName=document.getElementById('big-name'), bigNameRow=document.getElementById('big-namerow');
+let bigMode={type:'composer'};
+function bigCount(){document.getElementById('big-n').textContent=bigT.value.length+' 字';}
+function openBig(mode){
+  bigMode=mode||{type:'composer'};
+  const lib=bigMode.type==='lib', l=libLoad(), p=lib&&bigMode.index>=0?l[bigMode.index]:null;
+  bigNameRow.hidden=!lib;
+  document.getElementById('big-title').textContent=lib?(p?'编辑提示词':'新建提示词'):'编辑提示词';
+  document.getElementById('big-ok').textContent=lib?'保存':'用这段';
+  bigName.value=p?p.name:'';
+  bigT.value=lib?(p?p.text:''):cin.value;
+  bigT.placeholder=lib?'提示词正文…':'在这里从容地写长提示词…';
+  bigWrap.hidden=false; bigCount();
+  setTimeout(()=>(lib&&!p?bigName:bigT).focus(),40);
 }
-function readCfg(){return{baseUrl:document.getElementById('c-b').value.trim(),
-  apiKey:document.getElementById('c-k').value.trim(),
-  imageModels:document.getElementById('c-i').value.trim(),
-  visionModel:document.getElementById('c-v').value.trim()};}
+function closeBig(){bigWrap.hidden=true;}
+document.getElementById('c-big').onclick=()=>openBig({type:'composer'});
+document.getElementById('big-x').onclick=closeBig;
+document.getElementById('big-cancel').onclick=closeBig;
+bigWrap.querySelector('.mback').onclick=closeBig;
+bigT.addEventListener('input',bigCount);
+document.getElementById('big-ok').onclick=()=>{
+  if(bigMode.type==='lib'){
+    const n=bigName.value.trim(), t=bigT.value.trim();
+    if(!n||!t)return alert('标题和正文都要填');
+    const l=libLoad();
+    if(bigMode.index>=0)l[bigMode.index]={name:n,text:t}; else l.unshift({name:n,text:t});
+    libSave(l); closeBig(); aiTab='lib'; aiRender(); return;
+  }
+  cin.value=bigT.value; closeBig(); autoGrow(); cin.focus();
+};
+
+/* ── 提示词库 ── */
+function libLoad(){try{return JSON.parse(localStorage.getItem(LIBKEY))||[];}catch(e){return [];}}
+function libSave(l){localStorage.setItem(LIBKEY,JSON.stringify(l));}
+function slashClose(){document.getElementById('slash').innerHTML='';}
+function slashUpdate(){
+  const v=cin.value, at=cin.selectionStart;
+  const line=v.slice(0,at), m=line.match(/(?:^|\s)\/([^\s/]*)$/);
+  if(!m)return slashClose();
+  const q=(m[1]||'').toLowerCase();
+  const hits=libLoad().filter(p=>!q||p.name.toLowerCase().includes(q)||p.text.toLowerCase().includes(q));
+  const box=document.createElement('div'); box.className='slash';
+  if(!hits.length){box.innerHTML='<div class="none">提示词库还是空的，去「提示词库」标签添加</div>';}
+  else hits.slice(0,20).forEach((p,i)=>{
+    const b=document.createElement('button'); b.className='it'+(i===0?' sel':'');
+    b.innerHTML='<div class="n">'+esc(p.name)+'</div><div class="p">'+esc(p.text)+'</div>';
+    b.onclick=()=>{
+      const before=v.slice(0,at).replace(/(?:^|\s)\/[^\s/]*$/,mm=>mm.startsWith(' ')?' ':'');
+      cin.value=before+p.text+v.slice(at);
+      slashClose(); cin.focus(); autoGrow();
+      cin.selectionStart=cin.selectionEnd=(before+p.text).length;
+    };
+    box.appendChild(b);
+  });
+  const s=document.getElementById('slash'); s.innerHTML=''; s.appendChild(box);
+}
+document.addEventListener('click',e=>{
+  if(!composer.hidden&&!composer.contains(e.target))slashClose();
+});
+
+const ICON={
+  plus:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
+  copy:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+  check:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 12.5 9 17.5 20 6.5"/></svg>',
+  edit:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg>',
+  trash:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>',
+  arrow:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
+};
+function libHTML(){
+  const l=libLoad();
+  return '<div class="hint">存好常用提示词，在对话框输入 <b>/</b> 就能直接调用。只存在你这台设备的浏览器里。</div>'+
+    '<button class="libnew" id="l-new" style="margin-top:14px">'+ICON.plus+'新建提示词</button>'+
+    '<div class="lib">'+(l.length?l.map((p,i)=>
+      '<div class="it"><div class="n">'+esc(p.name)+'</div><div class="p">'+esc(p.text)+'</div>'+
+      '<div class="ops">'+
+        '<button class="iconbtn use" data-i="'+i+'" data-a="use" title="填入对话框">'+ICON.arrow+'填入</button>'+
+        '<button class="iconbtn" data-i="'+i+'" data-a="copy" title="复制">'+ICON.copy+'</button>'+
+        '<button class="iconbtn" data-i="'+i+'" data-a="edit" title="编辑">'+ICON.edit+'</button>'+
+        '<button class="iconbtn del" data-i="'+i+'" data-a="del" title="删除">'+ICON.trash+'</button>'+
+      '</div></div>').join('')
+      :'<div class="hint">还没有提示词，点上面新建一条。</div>')+'</div>';
+}
+function bindLib(){
+  document.getElementById('l-new').onclick=()=>openBig({type:'lib',index:-1});
+  aiBody.querySelectorAll('[data-a]').forEach(b=>b.onclick=async()=>{
+    const l=libLoad(), i=+b.dataset.i, p=l[i]; if(!p)return;
+    const a=b.dataset.a;
+    if(a==='use'){aiTab='gen';aiRender();cin.value=p.text;autoGrow();cin.focus();}
+    else if(a==='copy'){
+      try{await navigator.clipboard.writeText(p.text);}
+      catch(e){ // 非安全上下文下 clipboard API 不可用，退回老办法
+        const ta=document.createElement('textarea'); ta.value=p.text;
+        ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta);
+        ta.select(); try{document.execCommand('copy');}catch(e2){} ta.remove();
+      }
+      b.classList.add('ok'); b.innerHTML=ICON.check;
+      setTimeout(()=>{b.classList.remove('ok');b.innerHTML=ICON.copy;},1300);
+    }
+    else if(a==='edit'){openBig({type:'lib',index:i});}
+    else if(a==='del'){ if(!confirm('删除「'+p.name+'」？'))return; l.splice(i,1); libSave(l); aiRender(); }
+  });
+}
+
+/* ── 设置 ── */
+function cfgHTML(){
+  const c=aiCfg(), own=aiOwnGateway(), ms=aiModels();
+  const dflt=(aiSys.imageModels||[]).join(', ');
+  const src=(cur,def)=>'<div class="hint">当前生效：'+(cur
+    ? '<b>你填的</b> '+esc(cur)
+    : (own?'<b style="color:#e0392b">无</b>（你用的是自己的接口，必须自己填）'
+         : (def?'服务器默认 '+esc(def):'<b style="color:#e0392b">无</b>')))+'</div>';
+  return '<div class="hint">兼容 OpenAI 接口，直接手填即可。留空的项才用服务器默认'+
+      (aiSys.keyCount?'（已配 '+aiSys.keyCount+' 个 Key 轮换）':'')+
+    '。填的内容只存在你这台设备的浏览器里，不上传保存。</div>'+
+    '<div class="grp" style="margin-top:14px"><div class="gt">生图接口</div>'+
+      '<div class="gh">可换成任意 OpenAI 兼容站；留空 = 走服务器默认线路</div>'+
+      '<label class="lbl">Base URL</label><input class="fi" id="c-b" placeholder="留空 = 走服务器默认线路" value="'+esc(c.baseUrl||'')+'">'+
+      '<label class="lbl">API Key</label><input class="fi" id="c-k" type="password" autocomplete="new-password" placeholder="'+
+        (aiSys.keyCount?'留空 = 服务器默认的 '+aiSys.keyCount+' 个 Key':'sk-…')+'" value="'+esc(c.apiKey||'')+'">'+
+      '<div class="hint">多个 Key 用英文逗号分隔，每次请求轮换；某个 Key 被拒会自动换下一个。<br>'+
+      '你这条线路失败时会自动回落服务器默认线路——但仅限「明确被拒 / 连不上」，'+
+      '超时或 5xx 不回落，因为那时上游可能已经在出图并已扣费，再打一条就是两边都扣。</div></div>'+
+    '<div class="grp"><div class="gt">生图模型</div>'+
+      '<div class="gh">自己填模型名，多个用逗号分隔 → 下面下拉切换</div>'+
+      '<input class="fi" id="c-i" placeholder="'+(own?'例：gpt-image-2, flux-pro':'留空 = 服务器默认（'+esc(dflt||'无')+'）')+'" value="'+esc(c.imageModels||'')+'">'+
+      src(c.imageModels,dflt)+
+      (ms.length?'<label class="lbl">本次使用</label><select class="fi" id="c-m">'+
+        ms.map(m=>'<option'+(m===curModel()?' selected':'')+'>'+esc(m)+'</option>').join('')+'</select>':'')+
+      '<label class="lbl">尺寸</label><select class="fi" id="c-s">'+
+        ['1024x1024','1536x1024','1024x1536'].map(s=>'<option'+(s===(c.size||'1024x1024')?' selected':'')+'>'+s+'</option>').join('')+'</select>'+
+      '<button class="btn" id="c-pull" style="width:100%;margin-top:10px;font-size:12.5px;padding:7px 0">不知道有哪些？从接口拉一份（可选）</button>'+
+      (aiPicks.length?'<div class="picks">'+aiPicks.map(m=>'<button class="pick'+(ms.indexOf(m)>=0?' on':'')+'" data-p="'+esc(m)+'">'+esc(m)+'</button>').join('')+'</div>':'')+
+      '</div>'+
+    '<div class="grp"><div class="gt">视觉模型</div>'+
+      '<div class="gh">提示词优化 + 看图自动分类</div>'+
+      '<div class="hint">固定用服务器的轻量模型 <b>'+esc(aiSys.visionModel||'未配置')+'</b>。'+
+      '它只负责读图和写提示词，不跟着上面的生图接口走——那边不一定有视觉模型，也不该消耗你的生图额度。</div></div>'+
+    '<div class="row2"><button class="btn" id="c-test">测试连接</button><button class="btn pri" id="c-save">保存</button></div>'+
+    (aiState.cmsg?'<div class="stat '+aiState.cmsg.k+'">'+(aiState.cmsg.k==='busy'?'<span class="spin"></span>':'')+esc(aiState.cmsg.t)+'</div>':'');
+}
+const aiState={cmsg:null};
+function cmsg(k,t){aiState.cmsg=t?{k,t}:null;aiRender();}
+function readCfg(){
+  const g=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
+  const cur=aiCfg();
+  return {baseUrl:g('c-b'),apiKey:g('c-k'),imageModels:g('c-i'),
+          model:g('c-m')||cur.model||'',size:g('c-s')||cur.size||'1024x1024'};
+}
 function bindCfg(){
-  document.getElementById('c-save').onclick=()=>{
-    localStorage.setItem(AIKEY,JSON.stringify(readCfg()));
-    aiMsg('cmsg','ok','已保存到本机');
-  };
+  const save=()=>localStorage.setItem(AIKEY,JSON.stringify(readCfg()));
+  document.getElementById('c-save').onclick=()=>{save();cmsg('ok','已保存到本机');};
+  ['c-m','c-s'].forEach(id=>{const el=document.getElementById(id);if(el)el.onchange=save;});
   document.getElementById('c-test').onclick=async()=>{
-    localStorage.setItem(AIKEY,JSON.stringify(readCfg()));   // 用刚填的值去试
-    aiMsg('cmsg','busy','连接中…');
-    try{const d=await aiPost('models',{});
-      aiMsg('cmsg','ok','连接成功，接口提供 '+(d.models||[]).length+' 个模型');
-    }catch(e){aiMsg('cmsg','err','连接失败：'+(e.message||e));}
+    save(); cmsg('busy','连接中…');
+    try{const d=await aiPost('models',{});cmsg('ok','连接成功，接口提供 '+(d.models||[]).length+' 个模型');}
+    catch(e){cmsg('err','连接失败：'+(e.message||e));}
   };
   document.getElementById('c-pull').onclick=async()=>{
-    localStorage.setItem(AIKEY,JSON.stringify(readCfg()));
-    aiMsg('cmsg','busy','拉取中…');
+    save(); cmsg('busy','拉取中…');
     try{
       const d=await aiPost('models',{});
-      const imgs=(d.models||[]).filter(m=>/image|dall|flux|sd|midjourney|seedream|qwen-image/i.test(m));
-      if(!imgs.length)return aiMsg('cmsg','err','这个接口没有看起来像生图的模型，共 '+(d.models||[]).length+' 个');
-      const cur=readCfg(); cur.imageModels=imgs.join(', ');
-      localStorage.setItem(AIKEY,JSON.stringify(cur));
-      aiMsg('cmsg','ok','已填入 '+imgs.length+' 个生图模型：'+imgs.join('、'));
-    }catch(e){aiMsg('cmsg','err','拉取失败：'+(e.message||e));}
+      const all=d.models||[];
+      const imgs=all.filter(m=>/image|dall|flux|sd|midjourney|seedream|qwen-image|imagen|kolors/i.test(m));
+      aiPicks=imgs.length?imgs:all;
+      cmsg('ok',imgs.length?'点下面的模型名即可加入/移出（不会覆盖你已填的）'
+                           :'没识别出生图模型，列出全部 '+all.length+' 个自己挑');
+    }catch(e){aiPicks=[];cmsg('err','拉取失败：'+(e.message||e));}
   };
+  aiBody.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{
+    const m=b.dataset.p, box=document.getElementById('c-i');
+    const l=aiSplit(box.value); const i=l.indexOf(m);
+    if(i>=0)l.splice(i,1); else l.push(m);
+    box.value=l.join(', '); save(); aiRender();
+  });
 }
+
+sessLoad();
 
 /* ── 夜间模式 ── */
 const MOON='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';

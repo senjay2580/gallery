@@ -8,7 +8,7 @@
 # 之所以由后端代理而不是浏览器直连上游：① 中转站基本不发 CORS 头；② 出图 URL 常是裸 IP 的
 # http://（如 qkmss），HTTPS 页面会被 mixed-content 拦死。后端代拉后转 dataURL 返回，
 # 顺带复用 /api/upload 既有的 dataURL 契约，入库路径零改动。
-import json, os, base64, time, uuid, hmac, hashlib, urllib.request, urllib.error, threading, socket
+import json, os, base64, time, uuid, hmac, hashlib, urllib.request, urllib.error, threading, socket, shutil
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 BASE   = os.environ.get('GALLERY_BASE', '/srv/gallery')
@@ -52,6 +52,28 @@ def dirsize():
     try: return sum(e.stat().st_size for e in os.scandir(IMGDIR) if e.is_file())
     except Exception: return 0
 
+def save_dataurl(src, stem, limit=MAX):
+    """把 dataURL 落盘为 stem+ext，返回文件名。校验类型与大小，不合格直接抛。"""
+    if not src.startswith('data:image/') or ',' not in src: raise ValueError('need image dataURL')
+    head, b64 = src.split(',', 1)
+    ext = EXT.get(head[5:].split(';')[0].lower())
+    if not ext: raise ValueError('unsupported type')
+    raw = base64.b64decode(b64)
+    if len(raw) > limit: raise ValueError('image too large')
+    fn = stem + ext
+    path = os.path.join(IMGDIR, fn)
+    with open(path, 'wb') as f: f.write(raw)
+    os.chmod(path, 0o644)
+    return fn, len(raw)
+
+def out_item(it):
+    """对外的条目：src 换成需鉴权的 /api/img/，并给出缩略图地址。
+    列表只加载缩略图——卡片宽 ~300px，却下 2MB 原图是首屏慢的主因。"""
+    src = '/api/img/' + os.path.basename(it.get('src', ''))
+    o = dict(it, src=src)
+    o['thumb'] = ('/api/img/' + it['thumb']) if it.get('thumb') else src
+    return o
+
 def verify_pass(pw):
     try:
         algo, iters, salt, h = PHASH.split('$')
@@ -84,6 +106,24 @@ _rr_lock = threading.Lock()
 # ponytail: 全局单锁 —— 本站是单账号图库，生图串行足够；真要多人并发再换成 per-user 锁
 gen_lock = threading.Lock()
 
+# 生图跑在后台线程里，前端只轮询状态。这样关面板、刷新页面、甚至换台设备重新登录，
+# 都能把那张图接回来——否则连接一断，额度已经扣了，图却拿不到。
+# 进程重启会丢（状态只在内存），但生图本身也就几分钟，不值得为它上盘。
+GEN = {'job': '', 'status': 'idle', 'started': 0, 'ended': 0, 'prompt': '', 'model': '',
+       'via': '', 'error': '', 'revised': '', 'dataURL': ''}
+gen_state_lock = threading.Lock()
+
+def gen_snapshot():
+    """给前端的状态：不带 dataURL（几 MB，轮询传不起），只报有没有结果。
+    job 是每次生成的唯一 id——前端靠它去重，不能用 prompt 之类会重复的内容当 key
+    （同一句提示词再生成一次是完全正常的操作）。"""
+    with gen_state_lock:
+        g = dict(GEN)
+    elapsed = int((g['ended'] or time.time()) - g['started']) if g['started'] else 0
+    return {'job': g['job'], 'status': g['status'], 'elapsed': elapsed, 'prompt': g['prompt'],
+            'model': g['model'], 'via': g['via'], 'error': g['error'],
+            'ready': bool(g['dataURL'])}
+
 def ai_cfg(d):
     """请求体里的 {baseUrl, apiKey} 覆盖服务端默认；三者留空则回落 env。
     apiKey 逗号分隔 = 多 key 轮转池。"""
@@ -94,6 +134,12 @@ def ai_cfg(d):
 # 只有这些状态码能证明「上游明确拒绝、根本没开始干活」，换个 key 重来才不会重复计费。
 # 402=余额不足 401/403=鉴权 429=限流。5xx 一律不换：上游可能已经开始生成并扣了费。
 REJECT_CODES = (401, 402, 403, 429)
+
+class UpstreamError(Exception):
+    """safe=True 表示能证明上游没干活（明确被拒 / 压根没连上）——只有这种失败
+    才允许换 key 或回落到别的网关重来；否则可能已经扣过费了。"""
+    def __init__(self, msg, safe=False):
+        super().__init__(msg); self.safe = safe
 
 def ai_post(base, keys, path, payload, timeout=AI_TIMEOUT, idempotent=True):
     """POST 到上游，多 key round-robin。
@@ -119,17 +165,18 @@ def ai_post(base, keys, path, payload, timeout=AI_TIMEOUT, idempotent=True):
                 return json.loads(r.read())
         except urllib.error.HTTPError as e:
             detail = e.read(500).decode('utf-8', 'replace')
-            last = Exception('上游 %d：%s' % (e.code, detail[:300]))
-            if not idempotent and e.code not in REJECT_CODES:
+            safe = e.code in REJECT_CODES
+            last = UpstreamError('上游 %d：%s' % (e.code, detail[:300]), safe=safe)
+            if not idempotent and not safe:
                 raise last          # 可能已扣费，绝不换 key 重来
-        except (TimeoutError, socket.timeout) as e:
-            last = Exception('上游超时（%ss）：请求可能已在上游执行，未自动重试以免重复计费' % timeout)
+        except (TimeoutError, socket.timeout):
+            last = UpstreamError('上游超时（%ss）：请求可能已在上游执行，未自动重试以免重复计费' % timeout)
             if not idempotent: raise last
         except urllib.error.URLError as e:
-            # 连接层失败（DNS/拒绝连接/TLS）= 请求没送达，换 key 安全
-            last = Exception('URLError：%s' % e.reason)
+            # 连接层失败（DNS/拒绝连接/TLS）= 请求没送达，换 key / 换网关都安全
+            last = UpstreamError('连不上：%s' % e.reason, safe=True)
         except Exception as e:
-            last = Exception('%s：%s' % (type(e).__name__, e))
+            last = UpstreamError('%s：%s' % (type(e).__name__, e))
             if not idempotent: raise last
     raise last
 
@@ -178,6 +225,95 @@ TAG_SYS = ('你是图库管理助手。观察图片后只输出一个 JSON 对�
            '{"title":"简短中文标题(不超过20字)","cat":"单个中文分类词(如 摄影/插画/动物/风景/设计/人物)",'
            '"keywords":"5-10个中文关键词，逗号分隔"}')
 
+PROMPT_SYS = (
+    '你是生图提示词工程师。把用户口语化的要求改写成一条完整、具体、可直接喂给文生图模型的提示词。\n'
+    '规则：\n'
+    '1. 只输出提示词本身，不要解释、不要引号、不要「提示词：」之类的前缀。\n'
+    '2. 按这几块把画面写全：主体与任务 / 构图与版式 / 视觉风格与材质 / 文字与标注要求 /'
+    ' 画幅与输出格式 / 约束与不要出现的东西。\n'
+    '3. 如果附了图，说明用户想在这张图的基础上修改：先读懂图里已有的内容，'
+    '把要保留的部分明确写进提示词，再把用户这轮要改的地方改掉——不要丢掉原图的其他特征。\n'
+    '4. 如果有之前几轮对话，理解它是连续的修改过程，在最新状态上继续改。\n'
+    '5. 用户明确指定的内容不得擅自更改或删除；不要凭空加入人物姓名、品牌、文字水印。\n'
+    '6. 长度控制在 220 字以内，用中文写（模型能理解中文）。')
+
+# ── 模板路由（awesome-gpt-image-2 风格库，MIT）──────────────────────────
+# 22 个工业级模板，每个带「何时用 / 写作要点 / 常见坑」。生成前先让小模型按用户
+# 意图选一个，再把该模板的要点注入写作环节——比一句通用的「写详细点」有效得多。
+def load_styles():
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'styles.json')
+    try:
+        with open(p, encoding='utf-8') as f: return json.load(f)
+    except Exception as e:
+        print('[styles] 未加载模板库（%s），提示词优化退化为通用模式' % e, flush=True)
+        return {'templates': []}
+
+STYLES = load_styles()
+TPL_BY_ID = {t['id']: t for t in STYLES.get('templates', [])}
+
+ROUTE_SYS = (
+    '你是生图任务分诊器。下面是一组提示词模板，每个有 id 和适用场景。\n'
+    '读用户的需求，选出最合适的一个模板。只输出这个模板的 id，不要任何其他内容。\n'
+    '如果没有任何模板明显合适，输出 none。\n\n模板清单：\n' +
+    '\n'.join('- %s（%s）：%s' % (t['id'], t['title'], t['useWhen'])
+              for t in STYLES.get('templates', [])))
+
+def route_template(text, turns_text):
+    """选模板。选不出来就返回 None——路由失败不该阻断生图。"""
+    if not TPL_BY_ID: return None
+    try:
+        r = ai_post(AI_BASE, AI_KEYS, '/v1/chat/completions', {
+            'model': AI_VIS_M, 'max_tokens': 30,
+            'messages': [{'role': 'system', 'content': ROUTE_SYS},
+                         {'role': 'user', 'content': ((turns_text + '\n') if turns_text else '') + text}]},
+            timeout=90)
+        tid = (r['choices'][0]['message']['content'] or '').strip().strip('`"\'' + ' 。.')
+        return TPL_BY_ID.get(tid)
+    except Exception as e:
+        print('[styles] 路由失败，走通用模式：%s' % str(e)[:120], flush=True)
+        return None
+
+def tpl_block(t):
+    return ('\n\n本次采用模板「%s」（%s）。\n适用：%s\n写作要点：\n%s\n必须避免：\n%s' % (
+        t['title'], t['category'], t['useWhen'],
+        '\n'.join('- ' + g for g in t.get('guidance', [])),
+        '\n'.join('- ' + p for p in t.get('pitfalls', []))))
+
+
+def gen_worker(plan, prompt, size):
+    """后台生图。plan = [(base, keys, model, label), ...]，按序尝试。
+    只有 UpstreamError.safe（明确被拒 / 没连上，证明上游没干活）才换下一条线路；
+    超时或 5xx 直接失败——那两种情况上游可能已在出图并已扣费，再打一条线路就是两边都扣。"""
+    err = None
+    try:
+        for i, (b, k, m, label) in enumerate(plan):
+            payload = {'model': m, 'prompt': prompt, 'n': 1}
+            if size: payload['size'] = size
+            try:
+                r = ai_post(b, k, '/v1/images/generations', payload, idempotent=False)
+            except UpstreamError as e:
+                err = e
+                if i + 1 >= len(plan) or not e.safe: raise
+                print('[ai] 线路失败(%s)，回落下一条' % str(e)[:80], flush=True)
+                continue
+            out = (r.get('data') or [{}])[0]
+            if out.get('b64_json'):
+                src = to_dataurl(base64.b64decode(out['b64_json']), 'image/png')
+            elif out.get('url'):
+                src = fetch_image(out['url'])
+            else:
+                raise UpstreamError('上游未返回图片：' + json.dumps(r)[:200])
+            with gen_state_lock:
+                GEN.update(status='done', ended=time.time(), dataURL=src, model=m,
+                           via=label, revised=out.get('revised_prompt') or '', error='')
+            return
+        raise err or UpstreamError('没有可用线路')
+    except Exception as e:
+        with gen_state_lock:
+            GEN.update(status='error', ended=time.time(), error=str(e)[:400], dataURL='')
+    finally:
+        gen_lock.release()
+
 
 class H(BaseHTTPRequestHandler):
     def _send(self, code, obj=None, cookie=None):
@@ -217,8 +353,7 @@ class H(BaseHTTPRequestHandler):
             # 图库整体私有：未登录连列表都拿不到
             if not self._authed(): return self._send(401, {'error': 'unauthorized'})
             # 出口改写 src：库里存的仍是 /images/xx.png（老数据不迁移），对外只暴露需鉴权的 /api/img/
-            return self._send(200, [dict(it, src='/api/img/' + os.path.basename(it.get('src', '')))
-                                    for it in load()])
+            return self._send(200, [out_item(it) for it in load()])
         if p == '/api/me':
             u = self._user()
             if not u: return self._send(401, {'error': 'unauthorized'})
@@ -230,25 +365,52 @@ class H(BaseHTTPRequestHandler):
             if u not in AI_USERS: return self._send(403, {'error': '该账号无 AI 权限'})
             return self._send(200, {'baseUrl': AI_BASE, 'keyCount': len(AI_KEYS),
                                     'imageModels': AI_IMG_M, 'visionModel': AI_VIS_M})
+        if p == '/api/ai/state':
+            # 生图跑在后台，这里问进度。关掉面板、刷新页面、换台设备登录都能接回来。
+            u = self._user()
+            if not u: return self._send(401, {'error': 'unauthorized'})
+            if u not in AI_USERS: return self._send(403, {'error': '该账号无 AI 权限'})
+            return self._send(200, gen_snapshot())
+        if p == '/api/ai/result':
+            u = self._user()
+            if not u: return self._send(401, {'error': 'unauthorized'})
+            if u not in AI_USERS: return self._send(403, {'error': '该账号无 AI 权限'})
+            with gen_state_lock:
+                g = dict(GEN)
+            if not g['dataURL']: return self._send(404, {'error': '当前没有可取的结果'})
+            return self._send(200, {'dataURL': g['dataURL'], 'model': g['model'],
+                                    'via': g['via'], 'revised_prompt': g['revised'],
+                                    'prompt': g['prompt']})
         if self.path.startswith('/api/img/'):
             return self._send_image()
         self._send(404, {'error': 'not found'})
 
     def _send_image(self):
-        """出图：必须登录。文件名只取 basename 并强制回到 IMGDIR 内，杜绝 ../ 穿越。"""
+        """出图：必须登录。文件名只取 basename 并强制回到 IMGDIR 内，杜绝 ../ 穿越。
+        带 ETag：图片内容不变时浏览器拿 304，不重复下载正文。
+        正文用 copyfileobj 流式写出，不把整张图读进内存。"""
         if not self._authed(): return self._send(401, {'error': 'unauthorized'})
         name = os.path.basename(self.path.split('?', 1)[0].rstrip('/'))
         path = os.path.realpath(os.path.join(IMGDIR, name))
         if not path.startswith(os.path.realpath(IMGDIR) + os.sep) or not os.path.isfile(path):
             return self._send(404, {'error': 'not found'})
+        st = os.stat(path)
+        etag = '"%x-%x"' % (int(st.st_mtime), st.st_size)
+        if self.headers.get('If-None-Match') == etag:
+            self.send_response(304)
+            self.send_header('ETag', etag)
+            self.send_header('Cache-Control', 'private, max-age=604800')
+            self.end_headers()
+            return
         ctype = next((c for c, e in EXT.items() if e == os.path.splitext(path)[1]), 'application/octet-stream')
-        raw = open(path, 'rb').read()
         self.send_response(200)
         self.send_header('Content-Type', ctype)
-        self.send_header('Content-Length', str(len(raw)))
-        self.send_header('Cache-Control', 'private, max-age=86400')
+        self.send_header('Content-Length', str(st.st_size))
+        self.send_header('ETag', etag)
+        self.send_header('Cache-Control', 'private, max-age=604800')
         self.end_headers()
-        self.wfile.write(raw)
+        with open(path, 'rb') as f:
+            shutil.copyfileobj(f, self.wfile, 64 * 1024)
     def do_POST(self):
         p = self.path.rstrip('/')
         if p == '/api/login':
@@ -270,22 +432,40 @@ class H(BaseHTTPRequestHandler):
             src = d.get('dataURL') or ''
             if not src.startswith('data:image/') or ',' not in src:
                 return self._send(400, {'error': 'need image dataURL'})
-            head, b64 = src.split(',', 1)
-            ext = EXT.get(head[5:].split(';')[0].lower())
-            if not ext: return self._send(415, {'error': 'unsupported type'})
-            try: raw = base64.b64decode(b64)
+            iid = uuid.uuid4().hex[:12]
+            try: fn, n = save_dataurl(src, iid)
+            except ValueError as e:
+                return self._send(413 if 'large' in str(e) else 415, {'error': str(e)})
             except Exception: return self._send(400, {'error': 'bad base64'})
-            if len(raw) > MAX: return self._send(413, {'error': 'image too large (>12MB)'})
-            if dirsize() + len(raw) > CAP: return self._send(507, {'error': 'storage full'})
-            iid = uuid.uuid4().hex[:12]; fn = iid + ext
-            path = os.path.join(IMGDIR, fn)
-            with open(path, 'wb') as f: f.write(raw)
-            os.chmod(path, 0o644)
+            if dirsize() + n > CAP:
+                try: os.remove(os.path.join(IMGDIR, fn))
+                except Exception: pass
+                return self._send(507, {'error': 'storage full'})
             item = {'id': iid, 'src': '/images/' + fn, 'w': d.get('w'), 'h': d.get('h'),
                     'title': (d.get('title') or '')[:200], 'cat': (d.get('cat') or '')[:60],
                     'keywords': (d.get('keywords') or '')[:300], 't': int(time.time())}
+            # 前端顺手用 canvas 压好的缩略图；服务端零依赖压不了图，所以由浏览器出力
+            tsrc = d.get('thumbURL') or ''
+            if tsrc.startswith('data:image/'):
+                try: item['thumb'] = save_dataurl(tsrc, iid + '_t', limit=900 * 1024)[0]
+                except Exception as e: print('[thumb] 存缩略图失败：%s' % e, flush=True)
             its = load(); its.insert(0, item); store(its)
-            return self._send(200, dict(item, src='/api/img/' + fn))
+            return self._send(200, out_item(item))
+
+        if p.startswith('/api/thumb/'):
+            # 给老图补缩略图（前端一次性迁移用）
+            if not self._authed(): return self._send(401, {'error': 'unauthorized'})
+            try: d = self._json()
+            except Exception: return self._send(400, {'error': 'bad json'})
+            iid = self._id(); its = load()
+            it = next((x for x in its if x['id'] == iid), None)
+            if not it: return self._send(404, {'error': 'not found'})
+            try: it['thumb'] = save_dataurl(d.get('thumbURL') or '', iid + '_t', limit=900 * 1024)[0]
+            except Exception as e: return self._send(400, {'error': str(e)})
+            if d.get('w'): it['w'] = d['w']
+            if d.get('h'): it['h'] = d['h']
+            store(its)
+            return self._send(200, out_item(it))
 
         # ── AI：需登录 且 在 AI 白名单内。烧的是站主自己的 key，非白名单账号一律 403 ──
         if p.startswith('/api/ai/'):
@@ -301,39 +481,73 @@ class H(BaseHTTPRequestHandler):
                     ids = sorted(m.get('id', '') for m in (r.get('data') or []) if m.get('id'))
                     return self._send(200, {'models': ids})
 
-                if p == '/api/ai/image':             # 生图 → 统一返回 dataURL
+                if p == '/api/ai/image':             # 启动后台生图，立刻返回；结果去 /api/ai/state 取
                     prompt = (d.get('prompt') or '').strip()
                     model = (d.get('model') or '').strip() or (AI_IMG_M[0] if AI_IMG_M else '')
                     if not prompt: return self._send(400, {'error': '请填写画面描述'})
                     if not model: return self._send(400, {'error': '未选择生图模型'})
-                    payload = {'model': model, 'prompt': prompt, 'n': 1}
-                    if d.get('size'): payload['size'] = d['size']
-                    # 同一账号同时只允许一个生图在飞：前端连点/多开标签页都不会变成多次计费
+
+                    # 先用你配的网关；它失败时才回落服务端默认（斑马）。
+                    plan = [(base, keys, model, '')]
+                    if (base != AI_BASE or keys != AI_KEYS) and AI_BASE and AI_KEYS and AI_IMG_M:
+                        plan.append((AI_BASE, AI_KEYS, AI_IMG_M[0], '默认线路'))
+
+                    # 同一时刻只允许一个生图在飞：连点 / 多开标签页 / 刷新后重发都不会变成多次计费。
+                    # 锁由 gen_worker 在 finally 里释放。
                     if not gen_lock.acquire(blocking=False):
                         return self._send(429, {'error': '已有一张图在生成中，请等它完成（避免重复计费）'})
-                    try:
-                        r = ai_post(base, keys, '/v1/images/generations', payload, idempotent=False)
-                    finally:
-                        gen_lock.release()
-                    out = (r.get('data') or [{}])[0]
-                    if out.get('b64_json'):
-                        src = to_dataurl(base64.b64decode(out['b64_json']), 'image/png')
-                    elif out.get('url'):
-                        src = fetch_image(out['url'])
-                    else:
-                        return self._send(502, {'error': '上游未返回图片：' + json.dumps(r)[:200]})
-                    return self._send(200, {'dataURL': src, 'model': model,
-                                            'revised_prompt': out.get('revised_prompt') or ''})
+                    with gen_state_lock:
+                        GEN.update(job=uuid.uuid4().hex[:12], status='running', started=time.time(),
+                                   ended=0, prompt=prompt, model=model, via='', error='',
+                                   revised='', dataURL='')
+                    threading.Thread(target=gen_worker, args=(plan, prompt, d.get('size')),
+                                     daemon=True).start()
+                    return self._send(202, gen_snapshot())
 
-                if p == '/api/ai/tag':               # 视觉小模型看图 → 标题/分类/关键词
+                if p == '/api/ai/prompt':
+                    # 提示词优化（ChatGPT 网页版那套）：把口语化输入 + 之前几轮 + 上一张图，
+                    # 交给便宜的视觉模型写成一条完整生图提示词。
+                    # 「把背景改成夜晚」这类指令必须让模型看着上一张图才知道在改什么，
+                    # 所以带图时走视觉输入。同样固定走服务端线路，不烧你的生图额度。
+                    text = (d.get('input') or '').strip()
+                    if not text: return self._send(400, {'error': '请先说要画什么'})
+                    if not (AI_BASE and AI_KEYS and AI_VIS_M):
+                        return self._send(503, {'error': '服务器未配置文本模型，无法优化提示词'})
+                    turns = d.get('turns') or []
+                    hist = '\n'.join('%s：%s' % ('上一轮画的' if t.get('role') == 'image' else '我说',
+                                                 str(t.get('text') or '')[:400]) for t in turns[-6:])
+                    last = d.get('dataURL') or ''
+                    # 第一步：按意图路由到最合适的模板；改图轮次沿用上一轮已选的模板
+                    tpl = TPL_BY_ID.get(d.get('template') or '') if d.get('keepTemplate') else None
+                    if not tpl: tpl = route_template(text, hist)
+                    sys_msg = PROMPT_SYS + (tpl_block(tpl) if tpl else '')
+                    ask = (('之前的对话：\n' + hist + '\n\n') if hist else '') + '我这轮的要求：' + text
+                    content = [{'type': 'text', 'text': ask}]
+                    if last.startswith('data:image/'):
+                        content.append({'type': 'image_url', 'image_url': {'url': last}})
+                    r = ai_post(AI_BASE, AI_KEYS, '/v1/chat/completions', {
+                        'model': AI_VIS_M, 'max_tokens': 800,
+                        'messages': [{'role': 'system', 'content': sys_msg},
+                                     {'role': 'user', 'content': content}]}, timeout=180)
+                    out = (r['choices'][0]['message']['content'] or '').strip()
+                    # 模型偶尔会裹一层引号或加「提示词：」，去掉
+                    out = out.strip('「」"\'` ').removeprefix('提示词：').strip()
+                    if not out: return self._send(502, {'error': '提示词优化返回空'})
+                    return self._send(200, {'prompt': out[:1500],
+                                            'template': tpl['id'] if tpl else '',
+                                            'templateTitle': tpl['title'] if tpl else ''})
+
+                if p == '/api/ai/tag':
+                    # 视觉打标固定走服务端默认线路（斑马的轻量模型）：它只负责看图打标，
+                    # 不跟着前端配的生图网关走——那边不一定有视觉模型，也不该消耗你的生图额度。
                     src = d.get('dataURL') or ''
-                    model = (d.get('model') or '').strip() or AI_VIS_M
                     if not src.startswith('data:image/'): return self._send(400, {'error': 'need image dataURL'})
-                    if not model: return self._send(400, {'error': '未配置视觉模型'})
+                    if not (AI_BASE and AI_KEYS and AI_VIS_M):
+                        return self._send(503, {'error': '服务器未配置视觉模型，无法自动分类'})
                     hint = (d.get('cats') or '')[:300]
                     ask = '为这张图生成图库元数据。' + (('已有分类：' + hint + '，能复用就复用，不合适再新建。') if hint else '')
-                    r = ai_post(base, keys, '/v1/chat/completions', {
-                        'model': model, 'max_tokens': 400,
+                    r = ai_post(AI_BASE, AI_KEYS, '/v1/chat/completions', {
+                        'model': AI_VIS_M, 'max_tokens': 400,
                         'messages': [{'role': 'system', 'content': TAG_SYS},
                                      {'role': 'user', 'content': [
                                          {'type': 'text', 'text': ask},
@@ -365,8 +579,10 @@ class H(BaseHTTPRequestHandler):
             if it['id'] == iid: removed = it
             else: keep.append(it)
         if removed:
-            try: os.remove(os.path.join(IMGDIR, os.path.basename(removed['src'])))
-            except Exception: pass
+            for fn in (os.path.basename(removed.get('src', '')), removed.get('thumb') or ''):
+                if not fn: continue
+                try: os.remove(os.path.join(IMGDIR, fn))
+                except Exception: pass
             store(keep)
         self._send(200, {'ok': True})
     def log_message(self, *a): pass
