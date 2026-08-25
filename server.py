@@ -86,10 +86,16 @@ def make_token(user):
     sig = hmac.new(SECRET, payload, hashlib.sha256).digest()
     return base64.urlsafe_b64encode(payload + b'.' + sig).decode()
 def check_token(tok):
-    """校验通过返回用户名，否则 None。返回用户名而非 bool——AI 白名单要按人判定。"""
+    """校验通过返回用户名，否则 None。返回用户名而非 bool——AI 白名单要按人判定。
+
+    按「末 32 字节 = 签名」切分，不能用 rsplit(b'.')：签名是随机二进制，
+    大约 11.8% 的概率(1-(255/256)^32)内部含有 0x2E('.')，那样 rsplit 会从签名
+    中间切开，payload 与 sig 双双错位，这个 token 就永远验不过——表现为随机的
+    「登录后立刻被踢回登录页」。分隔符仍然保留，老 token 照旧能用。"""
     try:
         raw = base64.urlsafe_b64decode(tok.encode())
-        payload, sig = raw.rsplit(b'.', 1)
+        payload, sig = raw[:-32], raw[-32:]
+        if payload.endswith(b'.'): payload = payload[:-1]
         if not hmac.compare_digest(hmac.new(SECRET, payload, hashlib.sha256).digest(), sig): return None
         user, exp = payload.decode().split(':')
         return user if int(exp) > time.time() else None

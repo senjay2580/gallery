@@ -493,6 +493,7 @@ function openDetail(id){
       '<div class="dc">'+esc(it.cat||'未分类')+'</div>'+
       '<div class="tags">'+(tags||'<span class="dc">无关键词</span>')+'</div>'+
       '<div class="actions"><button class="btn pri" data-dl>下载</button>'+
+        (auth&&aiAllowed?'<button class="btn" data-ai>✨ AI 完善</button>':'')+
         (auth?'<button class="btn" data-edit>编辑文字</button><button class="btn danger" data-del>删除</button>':'')+
       '</div>'+
     '</div></div>';
@@ -501,6 +502,7 @@ function openDetail(id){
   if(auth){
     panel.querySelector('[data-edit]').onclick=()=>edit(it);
     panel.querySelector('[data-del]').onclick=()=>del(it.id);
+    if(aiAllowed)panel.querySelector('[data-ai]').onclick=()=>aiEnrich(it);
   }
   if(it.thumb&&it.thumb!==it.src){
     const hi=new Image();
@@ -764,9 +766,10 @@ function delSession(id){
   chat=sessions.find(x=>x.id===curSid).msgs;
   sessSave(); aiRender();
 }
-function thumbOf(dataURL){
+function thumbOf(dataURL,max){
+  const M=max||320;
   return new Promise(res=>{const i=new Image();
-    i.onload=()=>{const s=320/Math.max(i.naturalWidth,i.naturalHeight,1), sc=Math.min(1,s);
+    i.onload=()=>{const s=M/Math.max(i.naturalWidth,i.naturalHeight,1), sc=Math.min(1,s);
       const cv=document.createElement('canvas');
       cv.width=Math.max(1,Math.round(i.naturalWidth*sc)); cv.height=Math.max(1,Math.round(i.naturalHeight*sc));
       cv.getContext('2d').drawImage(i,0,0,cv.width,cv.height);
@@ -1038,6 +1041,33 @@ async function autoTag(m){
     Object.assign(m,{title:d.title||'',cat:d.cat||'',keywords:d.keywords||''});
     chatSave(); renderChat(); note('已自动填好标题分类，可改后入库');
   }catch(e){note('自动分类失败：'+(e.message||e),'err');}
+}
+
+/* 详情页「AI 完善」：对已入库的图重新识别标题/分类/关键词并写回。
+   上传时随手填的随机文件名、空分类，靠这个补齐。 */
+async function aiEnrich(it){
+  const btn=panel.querySelector('[data-ai]');
+  if(!btn||btn.disabled)return;
+  const old=btn.textContent;
+  btn.disabled=true; btn.textContent='识别中…';
+  try{
+    // 打标用压到长边 768 的图：视觉模型看这个尺寸足够，省流量也省 token
+    const blob=await (await fetch(it.src,{headers:wh()})).blob();
+    const url=URL.createObjectURL(blob);
+    const small=await thumbOf(url,768);
+    URL.revokeObjectURL(url);
+    if(!small.thumb)throw new Error('图片读取失败');
+    const d=await aiPost('tag',{dataURL:small.thumb,cats:cats().join(',')});
+    const r=await fetch(API+'/items/'+it.id,{method:'PUT',headers:wh(),body:JSON.stringify({
+      title:d.title||it.title||'', cat:d.cat||it.cat||'', keywords:d.keywords||it.keywords||''})});
+    if(r.status===401)return on401(()=>boot());
+    if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||('HTTP '+r.status));
+    await reload();
+    openDetail(it.id);                      // 重开详情，直接看到新标题/分类
+  }catch(e){
+    btn.disabled=false; btn.textContent=old;
+    alert('AI 完善失败：'+(e.message||e));
+  }
 }
 
 async function addToGallery(m){
